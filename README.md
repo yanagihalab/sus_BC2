@@ -235,7 +235,7 @@ export NODE="https://injective-testnet-rpc.publicnode.com:443"
 export GAS_PRICES="500000000inj"
 ```
 
-送金先アドレスも設定します。
+送金先アドレスも設定。
 
 ```bash
 export RECIPIENT_ADDR="inj1送金先アドレスをここに入れる"
@@ -275,3 +275,147 @@ injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "1000000000000000inj" \
 https://www.mintscan.io/injective-testnet
 
 https://testnet.explorer.injective.network/
+
+
+## MTKの実行
+
+
+## 1. 環境変数を設定する
+
+```bash
+export KEY_NAME="mykey"
+export CHAIN_ID="injective-888"
+export NODE="https://injective-testnet-rpc.publicnode.com:443"
+export GAS_PRICES="500000000inj"
+export GAS="300000"
+export SUBDENOM="mtk"
+```
+
+自分のアドレスと TokenFactory denom を設定する。
+
+```bash
+export CREATOR_ADDR=$(injectived keys show "$KEY_NAME" -a)
+export DENOM="factory/${CREATOR_ADDR}/${SUBDENOM}"
+
+echo "CREATOR_ADDR=$CREATOR_ADDR"
+echo "DENOM=$DENOM"
+```
+
+`DENOM` は次の形式になる必要がある。
+
+```text
+factory/inj.../mtk
+```
+
+## 2. denom を作成する
+
+```bash
+injectived tx tokenfactory create-denom \
+  "$SUBDENOM" \
+  "My Token" \
+  "MTK" \
+  6 \
+  --from="$KEY_NAME" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --gas-prices="$GAS_PRICES" \
+  --gas="$GAS" \
+  -y
+```
+
+TxHash が出たら、次のコマンドで結果を確認する。
+
+```bash
+injectived query tx <TXHASH> \
+  --node="$NODE" \
+  -o json | jq
+```
+
+## 3. metadata を設定する
+
+```bash
+injectived tx tokenfactory set-denom-metadata \
+  "My Token Description" \
+  "$DENOM" \
+  "MTK" \
+  "My Token" \
+  "MTK" \
+  "" \
+  "" \
+  "[{\"denom\":\"$DENOM\",\"exponent\":0,\"aliases\":[]},{\"denom\":\"MTK\",\"exponent\":6,\"aliases\":[]}]" \
+  10 \
+  6 \
+  --from="$KEY_NAME" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --gas-prices="$GAS_PRICES" \
+  --gas="$GAS" \
+  -y
+```
+
+## 4. トークンを mint する
+
+ここでは `1000 MTK` 相当を mint する。
+`decimals=6` であるため、`1000 MTK = 1000000000` base unit である。
+
+```bash
+injectived tx tokenfactory mint \
+  "1000000000$DENOM" \
+  "$CREATOR_ADDR" \
+  --from="$KEY_NAME" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --gas-prices="$GAS_PRICES" \
+  --gas="$GAS" \
+  -y
+```
+
+## 5. 残高を確認する
+
+```bash
+injectived query bank balances "$CREATOR_ADDR" \
+  --node="$NODE" \
+  --chain-id="$CHAIN_ID" \
+  -o json | jq
+```
+
+## 6. トークンを送金する
+
+送金先アドレスを設定する。
+
+```bash
+export RECIPIENT_ADDR="inj1送金先アドレス"
+```
+
+`1 MTK` を送金する場合は次のコマンドである。
+
+```bash
+injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "1000000$DENOM" \
+  --from="$KEY_NAME" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --gas-prices="$GAS_PRICES" \
+  --gas="$GAS" \
+  -y
+```
+
+送金先の残高確認は次のとおりである。
+
+```bash
+injectived query bank balances "$RECIPIENT_ADDR" \
+  --node="$NODE" \
+  --chain-id="$CHAIN_ID" \
+  -o json | jq
+```
+
+`set-denom-metadata` で失敗する場合は、まず次を確認するべきである。
+
+```bash
+echo "DENOM=[$DENOM]"
+```
+
+ここが空であれば、`invalid metadata base denom: invalid denom:` が発生する。正しくは次のように表示される必要がある。
+
+```text
+DENOM=[factory/inj.../mtk]
+```
