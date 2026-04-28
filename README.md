@@ -423,6 +423,9 @@ DENOM=[factory/inj.../mtk]
 
 
 ## Proposer-visualizerの環境構築
+```bash
+sudo apt install npm
+```
 
 ```bash
 cd ~/sus_BC2/Proposer-visualizer
