@@ -419,3 +419,30 @@ echo "DENOM=[$DENOM]"
 ```text
 DENOM=[factory/inj.../mtk]
 ```
+
+
+
+## Proposer-visualizerの環境構築
+
+```bash
+cd ~/sus_BC2/Proposer-visualizer
+```
+
+まず、壊れた依存関係を削除する。
+
+```bash
+rm -rf node_modules package-lock.json
+```
+
+依存パッケージを入れ直す。
+
+```bash
+npm install
+```
+
+その後、再起動する。
+
+```bash
+npm run dev -- --host 0.0.0.0
+```
+
