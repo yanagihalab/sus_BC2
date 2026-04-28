@@ -225,3 +225,49 @@ chmod +x gradlew
 ./gradlew build
 ./gradlew :simulator:run
 ```
+
+
+## bank sendを用いた送金
+```bash
+export KEY_NAME="mykey"
+export CHAIN_ID="injective-888"
+export NODE="https://injective-testnet-rpc.publicnode.com:443"
+export GAS_PRICES="500000000inj"
+```
+
+送金先アドレスも設定します。
+
+```bash
+export RECIPIENT_ADDR="inj1送金先アドレスをここに入れる"
+```
+
+自分のアドレスも変数に入れる場合：
+
+```bash
+export ADDR=$(injectived keys show "$KEY_NAME" -a)
+echo "$ADDR"
+```
+
+確認用：
+
+```bash
+echo "KEY_NAME=[$KEY_NAME]"
+echo "ADDR=[$ADDR]"
+echo "RECIPIENT_ADDR=[$RECIPIENT_ADDR]"
+echo "CHAIN_ID=[$CHAIN_ID]"
+echo "NODE=[$NODE]"
+echo "GAS_PRICES=[$GAS_PRICES]"
+```
+
+```bash
+injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "1000000000000000inj" \
+  --from="$KEY_NAME" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --gas-prices="$GAS_PRICES" \
+  --gas=200000 \
+  --broadcast-mode sync \
+  -y
+```
+
+`1000000000000000inj` は `0.001 INJ` です。
