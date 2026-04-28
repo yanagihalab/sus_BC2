@@ -271,3 +271,7 @@ injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "1000000000000000inj" \
 ```
 
 `1000000000000000inj` は `0.001 INJ` です。
+
+https://www.mintscan.io/injective-testnet
+
+https://testnet.explorer.injective.network/
