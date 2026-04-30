@@ -16,13 +16,28 @@ wsl --install -d kali-linux
 ```bash
 sudo apt update
 sudo apt upgrade -y
-sudo apt install -y python3-pip python3-venv
+sudo apt install -y python3-pip python3-venv openjdk-11-jdk unzip
+```
+
+ここで任意の作業ディレクトリ/tempを作成
+```bash
+mkdir ~/temp
+```
+
+```bash
+git clone https://github.com/dsg-titech/simblock
+export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+export PATH="$JAVA_HOME/bin:$PATH"
+cd ~/simblock
+chmod +x gradlew
+./gradlew clean
+./gradlew build
+./gradlew :simulator:run
 ```
 
 ## 作業ディレクトリと Python 仮想環境の作成
 
 ```bash
-mkdir ~/temp
 cd ~/temp
 git clone https://github.com/yanagihalab/sus_BC2
 cd sus_BC2
@@ -31,8 +46,9 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
----
+ここで
 
+---
 # Kali Linux 上での `injectived` 実行環境の整備
 
 本実験を Kali Linux 上で実施するためには，Injective の CLI 兼ノードデーモンである `injectived` を利用可能な状態にする必要がある。
@@ -43,6 +59,7 @@ pip install -r requirements.txt
 `injectived` の取得と展開を行う。
 
 ```bash
+cd ~/temp
 wget https://github.com/InjectiveFoundation/injective-core/releases/latest/download/linux-amd64.zip
 unzip linux-amd64.zip
 chmod +x injectived

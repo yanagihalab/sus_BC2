@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 # 定数定義
 # 使用する RPC エンドポイントを指定する
 # 例:
-# BASE_URL = "https://injective-testnet-rpc.publicnode.com:443"
 # BASE_URL = "https://osmosis-rpc.publicnode.com:443"
 # BASE_URL = "https://evmos-rpc.publicnode.com:443"
 # BASE_URL = "https://juno-rpc.publicnode.com:443"
