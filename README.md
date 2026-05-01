@@ -473,3 +473,70 @@ chmod +x gradlew
 ./gradlew build
 ./gradlew :simulator:run
 ```
+
+
+## 送金のコマンド訂正
+
+┌──(yanagihalab㉿admin-y)-[~/jikken/simblock]
+└─$ 
+```
+export KEY_NAME=testwallet
+export RECIPIENT_ADDR=inj13nrc4g4menc78aedxwax86d60wutaam55tv6ug
+export CHAIN_ID=injective-888
+export NODE=https://injective-testnet-rpc.publicnode.com:443
+export GAS_PRICES=500000000inj
+```
+
+┌──(yanagihalab㉿admin-y)-[~/jikken/simblock]
+└─$ 
+```
+echo "KEY_NAME=$KEY_NAME"
+injectived keys show "$KEY_NAME" --keyring-backend test
+KEY_NAME=testwallet
+```
+- address: inj1wn80n5shacgsff708sffgyynhkpwdr9jcr3zg8
+  name: testwallet
+  pubkey: '{"@type":"/injective.crypto.v1beta1.ethsecp256k1.PubKey","key":"A6MIbFNhEMHawyqEI4D701UhkmTHGkuzb1tfR46UsBXu"}'
+  type: local
+```
+
+┌──(yanagihalab㉿admin-y)-[~/jikken/simblock]
+└─$ 
+```
+injectived query bank balances "inj1wn80n5shacgsff708sffgyynhkpwdr9jcr3zg8" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE"
+```
+balances:
+- amount: "10000000000000000000"
+  denom: inj
+pagination:
+  total: "1"
+
+┌──(yanagihalab㉿admin-y)-[~/jikken/simblock]
+└─$ 
+```
+injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "100000000inj" \
+  --from="$KEY_NAME" \
+  --keyring-backend test \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --gas-prices="$GAS_PRICES" \
+  --gas=200000 \
+  --broadcast-mode sync \
+  -y
+```
+code: 0
+codespace: ""
+data: ""
+events: []
+gas_used: "0"
+gas_wanted: "0"
+height: "0"
+info: ""
+logs: []
+raw_log: ""
+timestamp: ""
+tx: null
+txhash: 322F692FB340865A0461DC81968C06A7AAECAF1B65375BE1F2D01CCBB88987E6
+
