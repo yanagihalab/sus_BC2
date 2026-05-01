@@ -498,7 +498,7 @@ KEY_NAME=testwallet
   name: testwallet
   pubkey: '{"@type":"/injective.crypto.v1beta1.ethsecp256k1.PubKey","key":"A6MIbFNhEMHawyqEI4D701UhkmTHGkuzb1tfR46UsBXu"}'
   type: local
-```
+
 
 ┌──(yanagihalab㉿admin-y)-[~/jikken/simblock]
 └─$ 
