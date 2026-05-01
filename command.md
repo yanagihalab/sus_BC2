@@ -16,7 +16,7 @@ wsl --install -d kali-linux
 ```bash
 sudo apt update
 sudo apt upgrade -y
-sudo apt install -y python3-pip python3-venv openjdk-11-jdk unzip npm jq
+sudo apt install -y python3-pip python3-venv openjdk-11-jdk unzip npm
 ```
 
 ## 作業ディレクトリ作成
@@ -48,11 +48,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
---- 
 
---- 
-
---- 
 
 ---
 # Kali Linux 上での `injectived` 実行環境の整備
@@ -114,6 +110,7 @@ export GAS_PRICES=500000000inj
 export GAS=1000000
 export KEY_NAME=testwalet
 export MY_ADDR=$(injectived keys show $KEY_NAME -a　--keyring-backend test)
+export SUBDENOM=mytoken
 ```
 
 faucet（フォーセット）実行後に，残高が反映されたかを確認するため，ウォレット残高を確認する．
