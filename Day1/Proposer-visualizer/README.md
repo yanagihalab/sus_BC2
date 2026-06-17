@@ -1,38 +1,37 @@
 # Proposer Visualizer
 
-Vite + React based visualizer for proposer sequence CSV files generated during
-the Day1 blockchain analysis exercises.
+Day1 のブロック解析で生成した proposer sequence CSV を可視化する Vite + React アプリである。
 
-## Requirements
+## 必要なもの
 
-- Node.js 20 or later
+- Node.js 20 以降
 - npm
 
-## Setup
+## セットアップ
 
 ```bash
 cd Day1/Proposer-visualizer
 npm install
 ```
 
-## Data
+## データ配置
 
-Place CSV files in `out/`. The development startup script runs
-`scripts/gen-manifest.cjs`, which scans `out/` or `public/out/` and writes an
-`index.json` manifest for the frontend.
+CSV ファイルは `out/` に配置する。
+起動時に `scripts/gen-manifest.cjs` が `out/` または `public/out/` を走査し、フロントエンドが読み込む `index.json` を生成する。
 
-The repository keeps the sample CSV in `out/proposer_sequence.csv`. Generated
-manifest files and installed dependencies are ignored by Git.
+このリポジトリにはサンプルとして `out/proposer_sequence.csv` を含めている。
+生成される manifest、build 出力、`node_modules/` は Git 管理対象外である。
 
-## Run
+## 起動
 
 ```bash
 npm run start
 ```
 
-The app starts Vite on `0.0.0.0:5173`, which is convenient from WSL/Kali Linux.
+`npm run start` は manifest を生成した後、Vite を `0.0.0.0:5173` で起動する。
+WSL / Kali Linux から Windows 側ブラウザで確認する場合にも使いやすい設定である。
 
-You can also run the steps manually:
+手動で実行する場合は、次の順に実行する。
 
 ```bash
 node scripts/gen-manifest.cjs
