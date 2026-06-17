@@ -28,18 +28,18 @@ docker run --rm \
     done
 
     echo "[3/5] Checking MTK helper usage"
-    ./setup/normal/07-tokenfactory-mtk.sh help >/tmp/mtk-help.txt
+    ./setup/macbook/07-tokenfactory-mtk.sh help >/tmp/mtk-help.txt
     grep -q "Usage:" /tmp/mtk-help.txt
 
     echo "[4/5] Checking bank send safety guard"
-    if ./setup/normal/06-bank-send.sh >/tmp/bank-send.txt 2>&1; then
+    if ./setup/macbook/06-bank-send.sh >/tmp/bank-send.txt 2>&1; then
       echo "bank send guard failed: script succeeded without RECIPIENT_ADDR" >&2
       exit 1
     fi
     grep -q "Set RECIPIENT_ADDR" /tmp/bank-send.txt
 
     echo "[5/5] Checking CW20 store safety guard"
-    if CONFIRM_TX=yes ./setup/normal/11-store-cw20-code.sh >/tmp/cw20-store.txt 2>&1; then
+    if CONFIRM_TX=yes ./setup/macbook/11-store-cw20-code.sh >/tmp/cw20-store.txt 2>&1; then
       echo "cw20 store guard failed: script succeeded without WASM file" >&2
       exit 1
     fi

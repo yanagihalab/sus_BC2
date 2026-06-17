@@ -84,7 +84,7 @@ requirements.txt
 - `Day1/Proposer-visualizer/`: Day1 で作った proposer sequence CSV をブラウザで見るための Vite + React アプリである。
 - `docs/injective-setup.md`: WSL / Kali Linux 上での Injective、SimBlock、関連ツールの環境構築メモである。
 - `./setup/normal/`: WSL / Kali Linux の通常実験で使う shell script である。
-- `./setup/macbook/`: MacBook 上の Docker Desktop で確認するための shell script である。
+- `./setup/macbook/`: MacBook 上の Docker Desktop で確認するための shell script と、MacBook から実行する通常部品の wrapper である。
 - `requirements.txt`: Python の実験で必要なライブラリ一覧である。
 
 ## setup スクリプト一覧
@@ -133,6 +133,9 @@ WSL / Kali Linux では次を実行する。
 | `./setup/normal/10-build-cw20-sample.sh` | `cw-plus` の取得と `workspace-optimizer` による CW20 WASM build |
 | `./setup/normal/11-store-cw20-code.sh` | CW20 WASM の Injective への store。実行には `CONFIRM_TX=yes` が必要 |
 | `./setup/macbook/verify-in-docker.sh` | README、`./setup/normal/`、`./setup/macbook/` の最小 Docker 検証 |
+
+MacBook で通常部品を実行する場合は、`./setup/macbook/00-install-kali-packages.sh` から `./setup/macbook/11-store-cw20-code.sh` までの同名 wrapper を使う。
+これらは `./setup/normal/` の本体を呼び出す入口である。
 
 例:
 
@@ -1052,7 +1055,7 @@ sudo service ssh restart
 
 ## 補足
 
-- `command.md` と `2-4command.md` には、実験時に使用したコマンドや作業メモを残している。
+- `command.md` には、実験時に使用したコマンドや作業メモを残している。
 - `jikken_txt.pdf` は元の実験資料である。
 - `command.env.example` はローカル環境変数の例である。秘密鍵、mnemonic、個人用 RPC 認証情報などは commit しないこと。
 - MacBook 上で Docker による簡易検証を行う場合は、[MacBook ユーザー向け: Docker による動作確認](docs/macbook-docker-verification.md) を参照する。
