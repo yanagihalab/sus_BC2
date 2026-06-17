@@ -20,13 +20,19 @@ clone 直後の README に含まれていた環境構築、Injective、wallet、
 
 このリポジトリの利用者は、次の順番で作業する。
 
-1. このリポジトリを clone する。
-2. Windows で作業する場合は、Kali Linux をインストールする。
+1. Windows で作業する場合は、Kali Linux をインストールする。
+2. このリポジトリを clone する。
 3. Kali Linux 上で実験用の環境構築を行う。
 
-### 1. リポジトリを clone する
+### 1. Kali Linux をインストールする
 
-まず、このリポジトリを手元の PC に取得する。
+Windows で作業する場合は、WSL 上に Kali Linux を用意する。
+すでに `wsl -d kali-linux` で Kali Linux を起動できる場合、この手順は省略できる。
+具体的な手順は「Windows で作業する場合: WSL / Kali Linux の準備」を参照する。
+
+### 2. リポジトリを clone する
+
+Kali Linux を起動したあと、このリポジトリを手元の PC に取得する。
 
 ```bash
 git clone https://github.com/yanagihalab/sus_BC2
@@ -36,14 +42,7 @@ cd sus_BC2
 対応する setup script: `./setup/normal/01-create-workdir-and-python-env.sh`
 
 clone 後は、この README を上から順番に確認する。
-Windows ユーザーは、次の Kali Linux インストール手順へ進む。
 MacBook ユーザーは、Kali Linux を直接 WSL として使えないため、MacBook 用 Docker 検証手順を参照する。
-
-### 2. Kali Linux をインストールする
-
-Windows で作業する場合は、WSL 上に Kali Linux を用意する。
-すでに `wsl -d kali-linux` で Kali Linux を起動できる場合、この手順は省略できる。
-具体的な手順は「Windows で作業する場合: WSL / Kali Linux の準備」を参照する。
 
 ### 3. Kali Linux 上で環境構築を行う
 
