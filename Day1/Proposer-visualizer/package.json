@@ -4,6 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:wsl": "vite --host 0.0.0.0 --port 5173",
+    "gen:manifest": "node scripts/gen-manifest.cjs",
+    "start": "npm run gen:manifest && npm run dev:wsl",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173"
   },
