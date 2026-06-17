@@ -8,7 +8,7 @@ GAS_PRICES="${GAS_PRICES:-500000000inj}"
 GAS="${GAS:-1000000}"
 
 if ! command -v injectived >/dev/null 2>&1; then
-  echo "injectived is not installed. Run setup/04-install-injectived.sh first." >&2
+  echo "injectived is not installed. Run setup/normal/04-install-injectived.sh first." >&2
   exit 1
 fi
 

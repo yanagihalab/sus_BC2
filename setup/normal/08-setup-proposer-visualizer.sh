@@ -2,11 +2,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 APP_DIR="${APP_DIR:-$REPO_ROOT/Day1/Proposer-visualizer}"
 
 if ! command -v npm >/dev/null 2>&1; then
-  echo "npm is not installed. Run setup/00-install-kali-packages.sh first." >&2
+  echo "npm is not installed. Run setup/normal/00-install-kali-packages.sh first." >&2
   exit 1
 fi
 

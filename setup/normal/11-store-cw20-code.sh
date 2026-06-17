@@ -13,7 +13,7 @@ KEYRING_BACKEND="${KEYRING_BACKEND:-test}"
 
 if [ ! -f "$WASM_PATH" ]; then
   echo "WASM file not found: $WASM_PATH" >&2
-  echo "Run setup/10-build-cw20-sample.sh first." >&2
+  echo "Run setup/normal/10-build-cw20-sample.sh first." >&2
   exit 1
 fi
 

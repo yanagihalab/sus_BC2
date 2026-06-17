@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TARGET_REPO="${TARGET_REPO:-$REPO_ROOT}"
 VENV_DIR="${VENV_DIR:-$TARGET_REPO/venv}"
 SETUP_SSH="${SETUP_SSH:-no}"

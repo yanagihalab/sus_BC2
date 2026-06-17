@@ -30,7 +30,10 @@ Day3/
 docs/
   injective-setup.md
 setup/
-  *.sh
+  normal/
+    *.sh
+  macbook/
+    *.sh
 requirements.txt
 ```
 
@@ -39,59 +42,60 @@ requirements.txt
 - `Day3/`: PoW、改ざん検知、nonce 計算、SimBlock 関連の実験である。
 - `Day1/Proposer-visualizer/`: Day1 で作った proposer sequence CSV をブラウザで見るための Vite + React アプリである。
 - `docs/injective-setup.md`: WSL / Kali Linux 上での Injective、SimBlock、関連ツールの環境構築メモである。
-- `setup/`: README に記載している主要な環境構築コマンドをまとめた shell script である。
+- `setup/normal/`: WSL / Kali Linux の通常実験で使う shell script である。
+- `setup/macbook/`: MacBook 上の Docker Desktop で確認するための shell script である。
 - `requirements.txt`: Python の実験で必要なライブラリ一覧である。
 
 ## setup スクリプト一覧
 
-README の主要なコマンドは、`setup/` 配下の shell script としても実行できる。
-MacBook の Docker 環境構築と、WSL / Kali Linux の通常実験環境構築は、入口スクリプトを分けている。
+README の主要なコマンドは、`setup/normal/` または `setup/macbook/` 配下の shell script としても実行できる。
+MacBook の Docker 環境構築と、WSL / Kali Linux の通常実験環境構築は、フォルダと入口スクリプトを分けている。
 送金、mint、WASM store などチェーンへ書き込む操作は、誤実行を防ぐために `CONFIRM_SEND=yes` または `CONFIRM_TX=yes` を付けた場合だけ実行される。
 
 ### 入口スクリプト
 
 | ファイル | 内容 |
 | --- | --- |
-| `setup/macbook-docker-env.sh` | MacBook 上の Docker Desktop で Kali Linux ベースの実験環境 image を作成し、基本検証を行う |
-| `setup/wsl-kali-experiment-env.sh` | WSL / Kali Linux 上で通常実験用の基本パッケージ、Python 仮想環境、可視化アプリ依存を整備する |
+| `setup/macbook/macbook-docker-env.sh` | MacBook 上の Docker Desktop で Kali Linux ベースの実験環境 image を作成し、基本検証を行う |
+| `setup/normal/wsl-kali-experiment-env.sh` | WSL / Kali Linux 上で通常実験用の基本パッケージ、Python 仮想環境、可視化アプリ依存を整備する |
 
 MacBook では次を実行する。
 
 ```bash
-./setup/macbook-docker-env.sh
+./setup/macbook/macbook-docker-env.sh
 ```
 
 WSL / Kali Linux では次を実行する。
 
 ```bash
-./setup/wsl-kali-experiment-env.sh
+./setup/normal/wsl-kali-experiment-env.sh
 ```
 
 ### 部品スクリプト
 
 | ファイル | 内容 |
 | --- | --- |
-| `setup/00-install-kali-packages.sh` | Kali Linux の更新と Python、Java、npm、jq などの基本パッケージ導入 |
-| `setup/01-create-workdir-and-python-env.sh` | `~/temp` 作成、リポジトリ clone、Python 仮想環境作成、`requirements.txt` の install |
-| `setup/02-setup-vscode-ssh.sh` | VS Code Remote - SSH 用の `openssh-server` 設定 |
-| `setup/03-install-simblock.sh` | SimBlock の clone、Java 設定、Gradle build |
-| `setup/04-install-injectived.sh` | `injectived` の取得、展開、`/usr/local/bin` への配置 |
-| `setup/05-create-test-wallet.sh` | `testwallet` の作成と Injective testnet 用環境変数の表示 |
-| `setup/06-bank-send.sh` | `bank send` による送金。実行には `RECIPIENT_ADDR` と `CONFIRM_SEND=yes` が必要 |
-| `setup/07-tokenfactory-mtk.sh` | MTK の denom 作成、metadata 設定、mint、残高確認、送金 |
-| `setup/08-setup-proposer-visualizer.sh` | Proposer Visualizer の `npm install` と起動案内 |
-| `setup/09-install-docker.sh` | Docker Engine の導入 |
-| `setup/10-build-cw20-sample.sh` | `cw-plus` の取得と `workspace-optimizer` による CW20 WASM build |
-| `setup/11-store-cw20-code.sh` | CW20 WASM の Injective への store。実行には `CONFIRM_TX=yes` が必要 |
-| `setup/verify-in-docker.sh` | README と `setup/` の最小 Docker 検証 |
+| `setup/normal/00-install-kali-packages.sh` | Kali Linux の更新と Python、Java、npm、jq などの基本パッケージ導入 |
+| `setup/normal/01-create-workdir-and-python-env.sh` | `~/temp` 作成、リポジトリ clone、Python 仮想環境作成、`requirements.txt` の install |
+| `setup/normal/02-setup-vscode-ssh.sh` | VS Code Remote - SSH 用の `openssh-server` 設定 |
+| `setup/normal/03-install-simblock.sh` | SimBlock の clone、Java 設定、Gradle build |
+| `setup/normal/04-install-injectived.sh` | `injectived` の取得、展開、`/usr/local/bin` への配置 |
+| `setup/normal/05-create-test-wallet.sh` | `testwallet` の作成と Injective testnet 用環境変数の表示 |
+| `setup/normal/06-bank-send.sh` | `bank send` による送金。実行には `RECIPIENT_ADDR` と `CONFIRM_SEND=yes` が必要 |
+| `setup/normal/07-tokenfactory-mtk.sh` | MTK の denom 作成、metadata 設定、mint、残高確認、送金 |
+| `setup/normal/08-setup-proposer-visualizer.sh` | Proposer Visualizer の `npm install` と起動案内 |
+| `setup/normal/09-install-docker.sh` | Docker Engine の導入 |
+| `setup/normal/10-build-cw20-sample.sh` | `cw-plus` の取得と `workspace-optimizer` による CW20 WASM build |
+| `setup/normal/11-store-cw20-code.sh` | CW20 WASM の Injective への store。実行には `CONFIRM_TX=yes` が必要 |
+| `setup/macbook/verify-in-docker.sh` | README、`setup/normal/`、`setup/macbook/` の最小 Docker 検証 |
 
 例:
 
 ```bash
-./setup/wsl-kali-experiment-env.sh
-./setup/04-install-injectived.sh
-./setup/05-create-test-wallet.sh
-RECIPIENT_ADDR=inj1送金先アドレス CONFIRM_SEND=yes ./setup/06-bank-send.sh
+./setup/normal/wsl-kali-experiment-env.sh
+./setup/normal/04-install-injectived.sh
+./setup/normal/05-create-test-wallet.sh
+RECIPIENT_ADDR=inj1送金先アドレス CONFIRM_SEND=yes ./setup/normal/06-bank-send.sh
 ```
 
 ## Windows で作業する場合: WSL / Kali Linux の確認
@@ -877,3 +881,19 @@ sudo service ssh restart
 - `jikken_txt.pdf` は元の実験資料である。
 - `command.env.example` はローカル環境変数の例である。秘密鍵、mnemonic、個人用 RPC 認証情報などは commit しないこと。
 - MacBook 上で Docker による簡易検証を行う場合は、[MacBook ユーザー向け: Docker による動作確認](docs/macbook-docker-verification.md) を参照する。
+
+## Kali Linux を WSL から登録解除する場合
+
+Kali Linux の WSL 環境を削除して作り直す場合は、PowerShell で次のコマンドを実行する。
+この操作を行うと、Kali Linux 内のファイル、設定、インストール済み package は削除される。
+必要なファイルは事前に退避する必要がある。
+
+```powershell
+wsl --unregister kali-linux
+```
+
+登録名が異なる場合は、先に次のコマンドで名前を確認する。
+
+```powershell
+wsl --list --verbose
+```
