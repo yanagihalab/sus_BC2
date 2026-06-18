@@ -33,9 +33,23 @@ sudo apt update
 sudo apt upgrade -y
 ```
 
+### 4. リポジトリを clone する
+
+Kali Linux を起動したあと、本リポジトリを手元の PC に取得する。
+
+```bash
+mkdir -p ~/temp
+cd ~/temp
+git clone https://github.com/yanagihalab/sus_BC2
+cd sus_BC2
+```
+
+対応する setup script: `./setup/normal/01-create-workdir-and-python-env.sh`
+
+
 対応する setup script: `./setup/normal/00-install-kali-packages.sh`
 
-### 4. 実験に使う基本ツールを入れる
+### 5. 実験に使う基本ツールを入れる
 
 Kali Linux 内に、Python、Git、Java、unzip、npm、jq などをインストールする。
 
@@ -57,19 +71,6 @@ jq --version
 ```
 
 対応する setup script: `./setup/normal/00-install-kali-packages.sh`
-
-### 5. リポジトリを clone する
-
-Kali Linux を起動したあと、本リポジトリを手元の PC に取得する。
-
-```bash
-mkdir -p ~/temp
-cd ~/temp
-git clone https://github.com/yanagihalab/sus_BC2
-cd sus_BC2
-```
-
-対応する setup script: `./setup/normal/01-create-workdir-and-python-env.sh`
 
 ### 6. Kali Linux 上で環境構築を行う
 

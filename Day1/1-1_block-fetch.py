@@ -32,7 +32,7 @@ hostname = parsed_base.hostname or ""
 m = re.match(r"^([a-zA-Z0-9\-]+)-rpc", hostname)
 BASE_NAME = m.group(1) if m else hostname.split(".")[0]
 
-SAVE_DIR = "./crrent"
+SAVE_DIR = "./current"
 
 os.makedirs(SAVE_DIR, exist_ok=True)
 
