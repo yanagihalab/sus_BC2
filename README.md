@@ -948,6 +948,198 @@ injectived tx wasm store artifacts/cw20_base.wasm \
 保存に成功すると、トランザクション結果から code ID を確認できる。
 以降のインスタンス化では、この code ID を指定する。
 
+### CW20 code ID を確認する
+
+`store` の実行後に `txhash` が返ったら、次のコマンドで code ID を確認する。
+
+```bash
+cd ~/temp/sus_BC2
+TXHASH="ここにTxHashを入れる"
+
+injectived q tx "$TXHASH" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --output json | jq
+```
+
+対応する setup script: なし。TxHash ごとに個別確認するコマンドである。
+
+出力の `events` から `code_id` を確認し、環境変数に入れる。
+
+```bash
+cd ~/temp/sus_BC2
+export CODE_ID="取得したcode_id"
+```
+
+対応する setup script: なし。チェーン上に保存された code ID を利用者が指定するためのコマンドである。
+
+### CW20 コントラクトをインスタンス化する
+
+`cw20-base` を利用するには、保存した code ID からコントラクトをインスタンス化する。
+ここでは、`testwallet` のアドレスに初期残高と mint 権限を与える。
+
+```bash
+cd ~/temp/sus_BC2
+export KEY_NAME="testwallet"
+export CHAIN_ID="injective-888"
+export NODE="https://injective-testnet-rpc.publicnode.com:443"
+export GAS_PRICES="500000000inj"
+export GAS="3000000"
+export MY_ADDR=$(injectived keys show "$KEY_NAME" -a --keyring-backend test)
+export CODE_ID="取得したcode_id"
+
+export INIT_MSG='{
+  "name": "My CW20 Token",
+  "symbol": "MCW20",
+  "decimals": 6,
+  "initial_balances": [
+    {
+      "address": "'"$MY_ADDR"'",
+      "amount": "1000000000"
+    }
+  ],
+  "mint": {
+    "minter": "'"$MY_ADDR"'",
+    "cap": "10000000000"
+  }
+}'
+
+injectived tx wasm instantiate "$CODE_ID" "$INIT_MSG" \
+  --label "my-cw20-token" \
+  --admin "$MY_ADDR" \
+  --from "$KEY_NAME" \
+  --keyring-backend test \
+  --chain-id "$CHAIN_ID" \
+  --node "$NODE" \
+  --gas-prices "$GAS_PRICES" \
+  --gas "$GAS" \
+  -y
+```
+
+対応する setup script: なし。CW20 の instantiate は code ID と初期化内容に依存するため、個別に実行する。
+
+`1000000000` は decimals が `6` の場合、`1000 MCW20` に相当する。
+`cap` は mint 可能な上限であり、不要な場合は実験条件に合わせて変更する。
+
+### CW20 contract address を確認する
+
+インスタンス化の TxHash が返ったら、Tx 結果を確認する。
+
+```bash
+cd ~/temp/sus_BC2
+TXHASH="ここにTxHashを入れる"
+
+injectived q tx "$TXHASH" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --output json | jq
+```
+
+対応する setup script: なし。TxHash ごとに個別確認するコマンドである。
+
+出力の `events` から `_contract_address` を確認し、環境変数に入れる。
+
+```bash
+cd ~/temp/sus_BC2
+export CONTRACT_ADDR="取得した_contract_address"
+```
+
+対応する setup script: なし。インスタンス化された contract address を利用者が指定するためのコマンドである。
+
+code ID から contract address を探す場合は、次のコマンドも利用できる。
+
+```bash
+cd ~/temp/sus_BC2
+injectived q wasm list-contract-by-code "$CODE_ID" \
+  --node "$NODE" \
+  --output json | jq
+```
+
+対応する setup script: なし。code ID ごとに個別確認するコマンドである。
+
+### CW20 の token info を確認する
+
+コントラクトが作成できたら、`token_info` を query する。
+
+```bash
+cd ~/temp/sus_BC2
+injectived q wasm contract-state smart "$CONTRACT_ADDR" \
+  '{"token_info":{}}' \
+  --node "$NODE" \
+  --output json | jq
+```
+
+対応する setup script: なし。contract address ごとに個別確認するコマンドである。
+
+### CW20 の残高を確認する
+
+自分の CW20 残高を確認する。
+
+```bash
+cd ~/temp/sus_BC2
+injectived q wasm contract-state smart "$CONTRACT_ADDR" \
+  '{"balance":{"address":"'"$MY_ADDR"'"}}' \
+  --node "$NODE" \
+  --output json | jq
+```
+
+対応する setup script: なし。contract address と address ごとに個別確認するコマンドである。
+
+### CW20 を送金する
+
+CW20 の送金先アドレスと送金量を設定する。
+`1000000` は decimals が `6` の場合、`1 MCW20` に相当する。
+
+```bash
+cd ~/temp/sus_BC2
+export RECIPIENT_ADDR="inj1送金先アドレス"
+export CW20_SEND_AMOUNT="1000000"
+
+injectived tx wasm execute "$CONTRACT_ADDR" \
+  '{"transfer":{"recipient":"'"$RECIPIENT_ADDR"'","amount":"'"$CW20_SEND_AMOUNT"'"}}' \
+  --from "$KEY_NAME" \
+  --keyring-backend test \
+  --chain-id "$CHAIN_ID" \
+  --node "$NODE" \
+  --gas-prices "$GAS_PRICES" \
+  --gas "$GAS" \
+  -y
+```
+
+対応する setup script: なし。送金先アドレスと contract address ごとに個別実行するコマンドである。
+
+### CW20 を mint する
+
+インスタンス化時に `mint.minter` として設定したアドレスから、追加発行を行う。
+
+```bash
+cd ~/temp/sus_BC2
+export CW20_MINT_AMOUNT="1000000"
+
+injectived tx wasm execute "$CONTRACT_ADDR" \
+  '{"mint":{"recipient":"'"$MY_ADDR"'","amount":"'"$CW20_MINT_AMOUNT"'"}}' \
+  --from "$KEY_NAME" \
+  --keyring-backend test \
+  --chain-id "$CHAIN_ID" \
+  --node "$NODE" \
+  --gas-prices "$GAS_PRICES" \
+  --gas "$GAS" \
+  -y
+```
+
+対応する setup script: なし。mint 権限を持つ address と contract address ごとに個別実行するコマンドである。
+
+### CW20 実行時の注意
+
+- `store` は WASM コードをチェーンへ保存する操作である。
+- `instantiate` は保存済み code ID から個別の contract address を作成する操作である。
+- `execute` は作成済み contract address に対して `transfer` や `mint` などのメッセージを実行する操作である。
+- `query` はチェーン状態を読む操作であり、gas fee を消費しない。
+- `cw20-base` の amount は最小単位で指定する。
+- decimals が `6` の場合、`1000000` が `1 MCW20` に相当する。
+- `mint` は、インスタンス化時に設定した minter だけが実行できる。
+- `CONTRACT_ADDR` は `CODE_ID` とは別の値である。
+
 ## 送金コマンドの実行例
 
 以下は、`testwallet` を使った送金確認の実行例である。
