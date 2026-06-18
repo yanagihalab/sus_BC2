@@ -226,6 +226,10 @@ export MY_ADDR=$(injectived keys show "$KEY_NAME" -a --keyring-backend test)
 
 対応する setup script: `./setup/normal/05-create-test-wallet.sh`
 
+Injective testnet の Faucet は次を利用する。
+
+- https://cloud.google.com/application/web3/faucet/injective/testnet
+
 Faucet 実行後に入金が反映されたかを確認するため、ウォレット残高を確認する。
 
 ```bash
