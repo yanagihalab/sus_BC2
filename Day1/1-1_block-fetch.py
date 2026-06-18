@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 # 使用する RPC エンドポイントを指定する
 # 例:
 # BASE_URL = "https://osmosis-rpc.publicnode.com:443"
-# BASE_URL = "https://evmos-rpc.publicnode.com:443"
+# BASE_URL = "https://axelar-rpc.publicnode.com:443"
 # BASE_URL = "https://juno-rpc.publicnode.com:443"
 # BASE_URL = "https://terra-rpc.publicnode.com:443"
 
@@ -32,7 +32,7 @@ hostname = parsed_base.hostname or ""
 m = re.match(r"^([a-zA-Z0-9\-]+)-rpc", hostname)
 BASE_NAME = m.group(1) if m else hostname.split(".")[0]
 
-SAVE_DIR = *__*
+SAVE_DIR = "./crrent"
 
 os.makedirs(SAVE_DIR, exist_ok=True)
 
