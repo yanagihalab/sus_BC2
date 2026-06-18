@@ -977,6 +977,95 @@ export CODE_ID="取得したcode_id"
 
 `cw20-base` を利用するには、保存した code ID からコントラクトをインスタンス化する。
 ここでは、`testwallet` のアドレスに初期残高と mint 権限を与える。
+CW20 の `symbol` は、英字またはハイフンのみで、3 文字以上 12 文字以下である必要がある。
+
+使用できない `symbol` の例を以下に示す。
+
+```text
+factory/inj1.../mtk
+mtk_v2
+MTK1
+MT
+My Token
+```
+
+使用できる `symbol` の例を以下に示す。
+
+```text
+MTK
+MYTOKEN
+MTK-TOKEN
+TESTTOKEN
+```
+
+`name` は表示名であるため、空白を含めてもよい。
+
+まず、`instantiate_msg.json` がある場合は内容を確認する。
+
+```bash
+cd ~/temp/sus_BC2
+cat instantiate_msg.json | jq
+cat instantiate_msg.json | jq -r '.symbol'
+```
+
+対応する setup script: なし。instantiate message の内容を個別確認するコマンドである。
+
+`symbol` が `factory/.../mtk` や `mtk_v2` のような値になっている場合は、次の内容で `instantiate_msg.json` を作り直す。
+
+```bash
+cd ~/temp/sus_BC2
+export KEY_NAME="testwallet"
+export NODE="https://injective-testnet-rpc.publicnode.com:443"
+export CREATOR_ADDR=$(injectived keys show "$KEY_NAME" -a --keyring-backend test)
+
+cat > instantiate_msg.json <<EOF
+{
+  "name": "My Token",
+  "symbol": "MTK",
+  "decimals": 6,
+  "initial_balances": [
+    {
+      "address": "$CREATOR_ADDR",
+      "amount": "1000000"
+    }
+  ],
+  "mint": {
+    "minter": "$CREATOR_ADDR"
+  },
+  "marketing": null
+}
+EOF
+
+cat instantiate_msg.json | jq
+```
+
+対応する setup script: なし。CW20 の初期化内容は実験条件に依存するため、個別に作成する。
+
+`symbol` の形式だけを確認する場合は、次のコマンドを実行する。
+
+```bash
+cd ~/temp/sus_BC2
+SYMBOL=$(jq -r '.symbol' instantiate_msg.json)
+
+echo "SYMBOL=$SYMBOL"
+
+echo "$SYMBOL" | grep -Eq '^[A-Za-z-]{3,12}$' \
+  && echo "[OK] symbol format is valid" \
+  || echo "[NG] symbol format is invalid"
+```
+
+対応する setup script: なし。CW20 symbol の形式を個別確認するコマンドである。
+
+`CODE_ID` が分かっている場合は、先に設定する。
+
+```bash
+cd ~/temp/sus_BC2
+export CODE_ID="ここにcode_idを入れる"
+```
+
+対応する setup script: なし。チェーン上に保存された code ID を利用者が指定するためのコマンドである。
+
+インスタンス化を実行する。
 
 ```bash
 cd ~/temp/sus_BC2
@@ -984,42 +1073,28 @@ export KEY_NAME="testwallet"
 export CHAIN_ID="injective-888"
 export NODE="https://injective-testnet-rpc.publicnode.com:443"
 export GAS_PRICES="500000000inj"
-export GAS="3000000"
-export MY_ADDR=$(injectived keys show "$KEY_NAME" -a --keyring-backend test)
-export CODE_ID="取得したcode_id"
+export GAS="300000"
 
-export INIT_MSG='{
-  "name": "My CW20 Token",
-  "symbol": "MCW20",
-  "decimals": 6,
-  "initial_balances": [
-    {
-      "address": "'"$MY_ADDR"'",
-      "amount": "1000000000"
-    }
-  ],
-  "mint": {
-    "minter": "'"$MY_ADDR"'",
-    "cap": "10000000000"
-  }
-}'
-
-injectived tx wasm instantiate "$CODE_ID" "$INIT_MSG" \
-  --label "my-cw20-token" \
-  --admin "$MY_ADDR" \
-  --from "$KEY_NAME" \
+INSTANTIATE_TXHASH=$(injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
+  --from="$KEY_NAME" \
   --keyring-backend test \
-  --chain-id "$CHAIN_ID" \
-  --node "$NODE" \
-  --gas-prices "$GAS_PRICES" \
-  --gas "$GAS" \
-  -y
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --label "cw20-mtk-sample" \
+  --no-admin \
+  --gas-prices="$GAS_PRICES" \
+  --gas="$GAS" \
+  --output json \
+  -y | tee instantiate_tx.json | jq -r '.txhash')
+
+echo "INSTANTIATE_TXHASH=$INSTANTIATE_TXHASH"
 ```
 
 対応する setup script: なし。CW20 の instantiate は code ID と初期化内容に依存するため、個別に実行する。
 
-`1000000000` は decimals が `6` の場合、`1000 MCW20` に相当する。
-`cap` は mint 可能な上限であり、不要な場合は実験条件に合わせて変更する。
+`1000000` は decimals が `6` の場合、`1 MTK` に相当する。
+TokenFactory の denom は `factory/inj.../mtk` の形式でよいが、CW20 の `symbol` には使えない。
+CW20 の `symbol` は表示用の短い ticker であるため、`"symbol": "MTK"` のように指定する。
 
 ### CW20 contract address を確認する
 
@@ -1027,12 +1102,12 @@ injectived tx wasm instantiate "$CODE_ID" "$INIT_MSG" \
 
 ```bash
 cd ~/temp/sus_BC2
-TXHASH="ここにTxHashを入れる"
+sleep 6
 
-injectived q tx "$TXHASH" \
+injectived q tx "$INSTANTIATE_TXHASH" \
   --chain-id="$CHAIN_ID" \
   --node="$NODE" \
-  --output json | jq
+  --output json | tee instantiate_result.json | jq '{height:.height, code:.code, raw_log:.raw_log, txhash:.txhash}'
 ```
 
 対応する setup script: なし。TxHash ごとに個別確認するコマンドである。
@@ -1041,7 +1116,17 @@ injectived q tx "$TXHASH" \
 
 ```bash
 cd ~/temp/sus_BC2
-export CONTRACT_ADDR="取得した_contract_address"
+export CONTRACT_ADDR=$(jq -r '
+  [
+    (.logs // .tx_response.logs // [])[].events[]?
+    | select(.type == "instantiate")
+    | .attributes[]?
+    | select(.key == "_contract_address" or .key == "contract_address")
+    | .value
+  ][0]
+' instantiate_result.json)
+
+echo "CONTRACT_ADDR=$CONTRACT_ADDR"
 ```
 
 対応する setup script: なし。インスタンス化された contract address を利用者が指定するためのコマンドである。
@@ -1088,7 +1173,7 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 ### CW20 を送金する
 
 CW20 の送金先アドレスと送金量を設定する。
-`1000000` は decimals が `6` の場合、`1 MCW20` に相当する。
+`1000000` は decimals が `6` の場合、`1 MTK` に相当する。
 
 ```bash
 cd ~/temp/sus_BC2
@@ -1136,7 +1221,7 @@ injectived tx wasm execute "$CONTRACT_ADDR" \
 - `execute` は作成済み contract address に対して `transfer` や `mint` などのメッセージを実行する操作である。
 - `query` はチェーン状態を読む操作であり、gas fee を消費しない。
 - `cw20-base` の amount は最小単位で指定する。
-- decimals が `6` の場合、`1000000` が `1 MCW20` に相当する。
+- decimals が `6` の場合、`1000000` が `1 MTK` に相当する。
 - `mint` は、インスタンス化時に設定した minter だけが実行できる。
 - `CONTRACT_ADDR` は `CODE_ID` とは別の値である。
 

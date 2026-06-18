@@ -1,0 +1,27 @@
+{
+  "height": "12345678",
+  "txhash": "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+  "code": 0,
+  "raw_log": "",
+  "logs": [
+    {
+      "msg_index": 0,
+      "log": "",
+      "events": [
+        {
+          "type": "instantiate",
+          "attributes": [
+            {
+              "key": "_contract_address",
+              "value": "inj1cw20contractaddresssample0000000000000000000"
+            },
+            {
+              "key": "code_id",
+              "value": "1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
