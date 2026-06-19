@@ -31,3 +31,4 @@ Day1/Proposer-visualizer/public/out/
 Day2/*.py
 Day3/*.py
 Day3/*.sh
+Day3/blockchain_2000_tampered.json
