@@ -31,7 +31,7 @@ def safe_int(value, default=0):
         return default
 
 
-def load_validator_files(input_dir: str):
+def load_validator_json_files(input_dir: str):
     rows = []
 
     for name in os.listdir(input_dir):
@@ -57,7 +57,7 @@ def load_validator_files(input_dir: str):
     return rows
 
 
-def normalize_validators(*__*):
+def normalize_validator_entries(*__*):
     out = {}
 
     for v in validators:
@@ -94,7 +94,7 @@ def summarize_validator_presence(*__*):
     })
 
     for height, _, data in blocks:
-        validators = normalize_validators(data.get("validators", []))
+        validators = normalize_validator_entries(data.get("validators", []))
 
         for addr, info in validators.items():
             st = stats[addr]
@@ -124,7 +124,7 @@ def analyze_per_height(blocks):
     per_height = []
 
     for height, path, data in blocks:
-        validators = normalize_validators(data.get("validators", []))
+        validators = normalize_validator_entries(data.get("validators", []))
         total_voting_power = sum(v["voting_power"] for v in validators.values())
 
         per_height.append({
@@ -144,7 +144,7 @@ def analyze_diffs(blocks):
     prev_validators = None
 
     for height, _, data in blocks:
-        current_validators = normalize_validators(data.get("validators", []))
+        current_validators = normalize_validator_entries(data.get("validators", []))
 
         if prev_validators is not None:
             prev_set = set(prev_validators.keys())
@@ -202,7 +202,7 @@ def build_validator_power_timeseries(blocks):
     normalized_by_height = []
 
     for _, _, data in blocks:
-        validators = normalize_validators(data.get("validators", []))
+        validators = normalize_validator_entries(data.get("validators", []))
         normalized_by_height.append(validators)
         all_addresses.update(validators.keys())
 
@@ -231,7 +231,7 @@ def build_validator_priority_timeseries(blocks):
     normalized_by_height = []
 
     for _, _, data in blocks:
-        validators = normalize_validators(data.get("validators", []))
+        validators = normalize_validator_entries(data.get("validators", []))
         normalized_by_height.append(validators)
         all_addresses.update(validators.keys())
 
@@ -384,7 +384,7 @@ def extract_proposer_maps(blocks):
         blockheader = data.get("blockheader", {})
         proposer_address = blockheader.get("proposer_address", "")
         proposer_by_height[height] = proposer_address
-        validators_by_height[height] = normalize_validators(data.get("validators", []))
+        validators_by_height[height] = normalize_validator_entries(data.get("validators", []))
 
     return proposer_by_height, validators_by_height
 
@@ -650,7 +650,7 @@ def print_summary(*__*, stats, per_height, diffs):
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    blocks = load_validator_files(INPUT_DIR)
+    blocks = load_validator_json_files(INPUT_DIR)
 
     if not blocks:
         print(f"[ERROR] no valid JSON files found in {INPUT_DIR}")

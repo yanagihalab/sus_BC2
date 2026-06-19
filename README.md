@@ -322,7 +322,7 @@ wsl --list --verbose
 
 対応する setup script: なし。Windows のコマンドプロンプトで実行する WSL 確認コマンドである。
 
-## MacBook ユーザー向けの補足
+<!-- ## MacBook ユーザー向けの補足
 
 MacBook 上で作業する場合は、Docker Desktop を利用して Kali Linux ベースの実験環境イメージを作成し、README、`./setup/normal/`、`./setup/macbook/` の最小検証を行う。
 MacBook 向けの Docker 環境構築と、WSL / Kali Linux の通常実験環境構築は、フォルダと入口スクリプトを分けている。
@@ -351,4 +351,4 @@ cd ~/temp/sus_BC2
 MacBook で通常部品を実行する場合は、`./setup/macbook/00-install-kali-packages.sh` から `./setup/macbook/11-store-cw20-code.sh` までの同名 wrapper を使う。
 これらは `./setup/normal/` の本体を呼び出す入口である。
 
-MacBook 上で Docker による簡易検証を行う場合は、[MacBook ユーザー向け: Docker による動作確認](docs/macbook-docker-verification.md) を参照する。
+MacBook 上で Docker による簡易検証を行う場合は、[MacBook ユーザー向け: Docker による動作確認](docs/macbook-docker-verification.md) を参照する。 -->

@@ -3,8 +3,8 @@ import os
 import re
 from datetime import datetime
 
-import pandas as pd
-import matplotlib.pyplot as plt
+import pandas as *__*
+import matplotlib.pyplot as *__*
 
 DATA_DIRECTORY = "current_osmosis"
 MAX_BLOCKS = 5000
@@ -116,12 +116,12 @@ def calculate_signature_time_span(data):
     }
 
 
-def analyze_block_json(file_path):
-    with open(file_path, "r", encoding="utf-8") as f:
+def analyze_single_block_json(*__*):
+    with open(file_path, *__*, encoding="utf-8") as *__*:
         data = json.load(f)
 
-    blockheader = data.get("blockheader", {}) or {}
-    blockresults = data.get("blockresults", {}) or {}
+    blockheader = *__*.get("blockheader", {}) or {}
+    blockresults = *__*.get("blockresults", {}) or {}
 
     filename = os.path.basename(file_path)
 
@@ -151,7 +151,7 @@ def analyze_block_json(file_path):
     return result
 
 
-def analyze_all_blocks(directory):
+def analyze_all_block_json_files(directory):
     results = []
     block_counter = 0
 
@@ -171,7 +171,7 @@ def analyze_all_blocks(directory):
         file_path = os.path.join(directory, filename)
 
         try:
-            analysis = analyze_block_json(file_path)
+            analysis = analyze_single_block_json(file_path)
             results.append(analysis)
             block_counter += 1
         except Exception as e:
@@ -207,7 +207,7 @@ def make_transactions_per_block_line(df: pd.DataFrame, plot_dir: str):
         print("DataFrame が空のため、transactions_per_block_line を作成できません。")
         return
 
-    plt.figure(figsize=(12, 6))
+    *__*.figure(figsize=(12, 6))
     plt.plot(df["height"], df["num_transactions"], marker="o", markersize=3, linewidth=1)
     plt.xlabel("Height")
     plt.ylabel("Number of Transactions")
@@ -230,7 +230,7 @@ def make_transaction_histogram(df: pd.DataFrame, plot_dir: str):
         return
 
     plt.figure(figsize=(12, 6))
-    plt.hist(df["num_transactions"], bins=50)
+    plt.*__*(df["num_transactions"], bins=50)
     plt.xlabel("Number of Transactions per Block")
     plt.ylabel("Frequency")
     plt.title("Histogram of Transactions per Block")
@@ -271,14 +271,14 @@ def make_block_diff_line(df: pd.DataFrame, plot_dir: str):
 def make_block_diff_histogram(df: pd.DataFrame, plot_dir: str):
     os.makedirs(plot_dir, exist_ok=True)
 
-    valid_diffs = df["block_diff_sec"].dropna()
+    *__* = df["block_diff_sec"].dropna()
 
     if valid_diffs.empty:
         print("block_diff_sec が空のため、block_diff_histogram を作成できません。")
         return
 
     plt.figure(figsize=(12, 6))
-    plt.hist(valid_diffs, bins=50)
+    plt.*__*(valid_diffs, bins=50)
     plt.xlabel("Block Time Difference (seconds)")
     plt.ylabel("Frequency")
     plt.title("Histogram of Block Time Differences")
@@ -363,7 +363,7 @@ def print_signature_time_span_summary(df: pd.DataFrame):
 
 
 if __name__ == "__main__":
-    all_results = analyze_all_blocks(DATA_DIRECTORY)
+    all_results = analyze_all_block_json_files(DATA_DIRECTORY)
 
     if not all_results:
         print("分析対象データがありません。")

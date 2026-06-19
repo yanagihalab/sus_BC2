@@ -45,7 +45,7 @@ def safe_int(value, default=0):
         return default
 
 
-def load_data():
+def load_analysis_csv_files():
     block_df = pd.read_csv(BLOCK_ANALYSIS_CSV)
     presence_df = pd.read_csv(VALIDATOR_PRESENCE_CSV)
     per_height_df = pd.read_csv(VALIDATOR_SET_PER_HEIGHT_CSV)
@@ -79,7 +79,7 @@ def load_data():
     return block_df, presence_df, per_height_df
 
 
-def load_raw_block_rows(raw_json_dir: str):
+def load_raw_block_json_rows(raw_json_dir: str):
     rows = []
 
     if not os.path.isdir(raw_json_dir):
@@ -215,7 +215,7 @@ def calc_current_proposer_values_in_prev_block(proposer_address, prev_validators
 
 
 def build_proposer_rank_df(raw_json_dir: str) -> pd.DataFrame:
-    block_rows = load_raw_block_rows(raw_json_dir)
+    block_rows = load_raw_block_json_rows(raw_json_dir)
 
     if not block_rows:
         return pd.DataFrame()
@@ -758,7 +758,7 @@ def print_summary(df: pd.DataFrame, presence_df: pd.DataFrame):
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    block_df, presence_df, per_height_df = load_data()
+    block_df, presence_df, per_height_df = load_analysis_csv_files()
     proposer_rank_df = build_proposer_rank_df(RAW_BLOCK_JSON_DIR)
 
     merged_df = build_merged_df(
