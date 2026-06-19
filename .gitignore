@@ -26,3 +26,8 @@ command.env
 # Generated experiment outputs
 Day1/Proposer-visualizer/out/index.json
 Day1/Proposer-visualizer/public/out/
+
+# Temporarily private experiment scripts
+Day2/*.py
+Day3/*.py
+Day3/*.sh
