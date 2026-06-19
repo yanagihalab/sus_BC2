@@ -260,6 +260,8 @@ injectived q tx "$INSTANTIATE_TXHASH" \
 
 対応する setup script: なし。TxHash ごとに個別確認するコマンドである。
 
+`instantiate_result.json` の出力例は、`scripts/CW20/examples/instantiate_result.json` に配置している。
+
 出力の `events` から `_contract_address` を確認し、環境変数に入れる。
 
 ```bash
@@ -450,4 +452,3 @@ injectived tx wasm execute "$CONTRACT_ADDR" \
 - decimals が `6` の場合、`1000000` が `1 MTK` に相当する。
 - `mint` は、インスタンス化時に設定した minter だけが実行できる。
 - `CONTRACT_ADDR` は `CODE_ID` とは別の値である。
-
