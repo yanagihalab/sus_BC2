@@ -34,7 +34,6 @@ cw20_transfer_tx.json
 cw20_transfer_result.json
 
 # Temporarily private experiment scripts
-Day2/*.py
 Day3/*.py
 Day3/*.sh
 Day3/blockchain_2000_tampered.json
