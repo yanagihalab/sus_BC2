@@ -351,7 +351,7 @@ with open(output_block_csv, "w", newline="", encoding="utf-8") as f:
     for row in results:
         writer.writerow(row)
 
-print("CSVを保存しました:", output_block_csv)
+print("CSVを保存:", output_block_csv)
 
 with open(output_summary_csv, "w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
@@ -369,7 +369,7 @@ with open(output_summary_csv, "w", newline="", encoding="utf-8") as f:
     for row in summary_by_power:
         writer.writerow(row)
 
-print("CSVを保存しました:", output_summary_csv)
+print("CSVを保存:", output_summary_csv)
 
 with open(output_global_csv, "w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
@@ -428,7 +428,7 @@ with open(output_global_csv, "w", newline="", encoding="utf-8") as f:
         top20_proposal_ratio
     ])
 
-print("CSVを保存しました:", output_global_csv)
+print("CSVを保存:", output_global_csv)
 
 block_heights = []
 proposer_voting_powers = []
@@ -447,7 +447,7 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", output_voting_power_transition_png)
+print("グラフを保存:", output_voting_power_transition_png)
 
 rank_list = []
 voting_power_rank_list = []
@@ -466,7 +466,7 @@ plt.tight_layout()
 plt.savefig(output_voting_power_rank_png)
 plt.close()
 
-print("グラフを保存しました:", output_voting_power_rank_png)
+print("グラフを保存:", output_voting_power_rank_png)
 
 cumulative_power = 0
 cumulative_power_ratios = []
@@ -490,7 +490,7 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", output_cumulative_voting_power_png)
+print("グラフを保存:", output_cumulative_voting_power_png)
 
 top_n = *__*
 
@@ -515,7 +515,7 @@ plt.tight_layout()
 plt.savefig(output_proposer_count_png)
 plt.close()
 
-print("グラフを保存しました:", output_proposer_count_png)
+print("グラフを保存:", output_proposer_count_png)
 
 summary_by_consecutive = []
 
@@ -547,5 +547,5 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", output_consecutive_count_png)
+print("グラフを保存:", output_consecutive_count_png)
 

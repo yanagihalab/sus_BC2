@@ -224,7 +224,7 @@ with open(output_csv, "w", newline="", encoding="utf-8") as f:
     for row in confirmed_results:
         writer.writerow(row)
 
-print("CSVを保存しました:", output_csv)
+print("CSVを保存:", output_csv)
 
 with open(output_mempool_csv, "w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
@@ -237,7 +237,7 @@ with open(output_mempool_csv, "w", newline="", encoding="utf-8") as f:
     for row in mempool_size_results:
         writer.writerow(row)
 
-print("CSVを保存しました:", *__*)
+print("CSVを保存:", *__*)
 
 tx_ids = []
 fees = []
@@ -281,7 +281,7 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", fee_vs_waiting_blocks_png)
+print("グラフを保存:", fee_vs_waiting_blocks_png)
 
 plt.figure(figsize=(10, 5))
 plt.scatter(*__*, *__*)
@@ -293,7 +293,7 @@ plt.tight_layout()
 plt.savefig(tx_size_vs_waiting_blocks_png)
 plt.close()
 
-print("グラフを保存しました:", tx_size_vs_waiting_blocks_png)
+print("グラフを保存:", tx_size_vs_waiting_blocks_png)
 
 plt.figure(figsize=(10, 5))
 plt.scatter(fee_per_sizes, waiting_blocks_list)
@@ -305,7 +305,7 @@ plt.tight_layout()
 plt.savefig(fee_per_size_vs_waiting_blocks_png)
 plt.close()
 
-print("グラフを保存しました:", fee_per_size_vs_waiting_blocks_png)
+print("グラフを保存:", fee_per_size_vs_waiting_blocks_png)
 
 plt.figure(figsize=(10, 5))
 plt.plot(block_heights, mempool_sizes)
@@ -317,4 +317,4 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", mempool_size_line_png)
+print("グラフを保存:", mempool_size_line_png)

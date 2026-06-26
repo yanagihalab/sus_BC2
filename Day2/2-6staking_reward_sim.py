@@ -115,7 +115,7 @@ with open(output_csv, "w", newline="", encoding="utf-8") as f:
     for row in results:
         writer.writerow(row)
 
-print("CSVを保存しました:", output_csv)
+print("CSVを保存:", output_csv)
 
 simple_stake = initial_stake
 simple_total_reward = 0.0
@@ -169,7 +169,7 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", output_current_stake_line_png)
+print("グラフを保存:", output_current_stake_line_png)
 
 plt.figure(figsize=(10, 5))
 plt.plot(days, total_rewards)
@@ -181,7 +181,7 @@ plt.tight_layout()
 plt.savefig(output_total_reward_line_png)
 plt.close()
 
-print("グラフを保存しました:", output_total_reward_line_png)
+print("グラフを保存:", output_total_reward_line_png)
 
 plt.figure(figsize=(10, 5))
 plt.plot(days, daily_rewards)
@@ -193,7 +193,7 @@ plt.tight_layout()
 plt.savefig(output_daily_reward_line_png)
 plt.close()
 
-print("グラフを保存しました:", output_daily_reward_line_png)
+print("グラフを保存:", output_daily_reward_line_png)
 
 plt.figure(figsize=(10, 5))
 plt.hist(daily_rewards, bins=*__*)
@@ -205,7 +205,7 @@ plt.tight_layout()
 plt.savefig(output_daily_reward_hist_png)
 plt.close()
 
-print("グラフを保存しました:", output_daily_reward_hist_png)
+print("グラフを保存:", output_daily_reward_hist_png)
 
 plt.figure(figsize=(10, 5))
 plt.plot(days, current_stakes, label="Current Stake")
@@ -219,7 +219,7 @@ plt.tight_layout()
 plt.savefig(output_stake_and_reward_line_png)
 plt.close()
 
-print("グラフを保存しました:", output_stake_and_reward_line_png)
+print("グラフを保存:", output_stake_and_reward_line_png)
 
 plt.figure(figsize=(10, 5))
 plt.bar(monthly_labels, monthly_rewards)
@@ -231,7 +231,7 @@ plt.tight_layout()
 plt.savefig(output_monthly_reward_bar_png)
 plt.close()
 
-print("グラフを保存しました:", output_monthly_reward_bar_png)
+print("グラフを保存:", output_monthly_reward_bar_png)
 
 plt.figure(figsize=(10, 5))
 plt.plot(days, profit_ratios)
@@ -243,7 +243,7 @@ plt.tight_layout()
 plt.savefig(output_profit_ratio_line_png)
 plt.close()
 
-print("グラフを保存しました:", output_profit_ratio_line_png)
+print("グラフを保存:", output_profit_ratio_line_png)
 
 plt.figure(figsize=(10, 5))
 plt.plot(days, simple_stakes, label="Simple")
@@ -257,7 +257,7 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", output_simple_vs_compound_line_png)
+print("グラフを保存:", output_simple_vs_compound_line_png)
 
 final_simple_stake = simple_stakes[-1]
 final_compound_stake = compound_stakes[-1]
@@ -284,4 +284,4 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", output_final_stake_bar_png)
+print("グラフを保存:", output_final_stake_bar_png)

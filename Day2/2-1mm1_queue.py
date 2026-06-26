@@ -141,7 +141,7 @@ with open(output_csv, "w", newline="", encoding="utf-8") as f:
     for row in results:
         writer.writerow(row)
 
-print("CSVを保存しました:", output_csv)
+print("CSVを保存:", output_csv)
 
 plt.figure(figsize=(10, 5))
 plt.plot(customer_ids, waiting_times_seconds)
@@ -153,7 +153,7 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", waiting_time_sec_line_png)
+print("グラフを保存:", waiting_time_sec_line_png)
 
 plt.figure(figsize=(10, 5))
 plt.plot(customer_ids, waiting_times_minutes)
@@ -165,7 +165,7 @@ plt.tight_layout()
 plt.savefig(waiting_time_min_line_png)
 plt.close()
 
-print("グラフを保存しました:", waiting_time_min_line_png)
+print("グラフを保存:", waiting_time_min_line_png)
 
 plt.figure(figsize=(10, 5))
 plt.hist(waiting_times_seconds, bins=30)
@@ -177,7 +177,7 @@ plt.tight_layout()
 plt.savefig(waiting_time_sec_hist_png)
 plt.close()
 
-print("グラフを保存しました:", waiting_time_sec_hist_png)
+print("グラフを保存:", waiting_time_sec_hist_png)
 
 plt.figure(figsize=(10, 5))
 plt.hist(waiting_times_minutes, bins=30)
@@ -189,7 +189,7 @@ plt.tight_layout()
 plt.savefig(waiting_time_min_hist_png)
 plt.close()
 
-print("グラフを保存しました:", waiting_time_min_hist_png)
+print("グラフを保存:", waiting_time_min_hist_png)
 
 plt.figure(figsize=(10, 5))
 plt.plot(customer_ids, system_times_seconds)
@@ -201,7 +201,7 @@ plt.tight_layout()
 plt.savefig(system_time_sec_line_png)
 plt.close()
 
-print("グラフを保存しました:", system_time_sec_line_png)
+print("グラフを保存:", system_time_sec_line_png)
 
 plt.figure(figsize=(10, 5))
 plt.plot(customer_ids, system_times_minutes)
@@ -213,4 +213,4 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", system_time_min_line_png)
+print("グラフを保存:", system_time_min_line_png)

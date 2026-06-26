@@ -106,7 +106,7 @@ with open(output_csv, "w", newline="", encoding="utf-8") as f:
     for row in results:
         writer.writerow(row)
 
-print("CSVを保存しました:", output_csv)
+print("CSVを保存:", output_csv)
 
 transfer_ids = []
 chain_a_waits = []
@@ -131,7 +131,7 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", output_total_delay_line_png)
+print("グラフを保存:", output_total_delay_line_png)
 
 plt.figure(figsize=(10, 5))
 plt.plot(transfer_ids, chain_a_waits, label="Chain A Wait")
@@ -146,7 +146,7 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", output_delay_components_line_png)
+print("グラフを保存:", output_delay_components_line_png)
 
 plt.figure(figsize=(10, 5))
 plt.hist(total_transfer_delays, bins=*__*)
@@ -158,7 +158,7 @@ plt.tight_layout()
 plt.savefig(output_total_delay_hist_png)
 plt.close()
 
-print("グラフを保存しました:", output_total_delay_hist_png)
+print("グラフを保存:", output_total_delay_hist_png)
 
 average_values = [
     average_chain_a_wait,
@@ -182,7 +182,7 @@ plt.tight_layout()
 plt.savefig(output_average_delay_bar_png)
 plt.close()
 
-print("グラフを保存しました:", output_average_delay_bar_png)
+print("グラフを保存:", output_average_delay_bar_png)
 
 bottom_for_relayer = []
 
@@ -207,7 +207,7 @@ plt.tight_layout()
 plt.savefig(output_delay_components_stacked_bar_png)
 plt.close()
 
-print("グラフを保存しました:", output_delay_components_stacked_bar_png)
+print("グラフを保存:", output_delay_components_stacked_bar_png)
 
 plt.figure(figsize=(8, 5))
 plt.scatter(relayer_delays, total_transfer_delays)
@@ -219,7 +219,7 @@ plt.tight_layout()
 plt.savefig(output_relayer_vs_total_png)
 plt.close()
 
-print("グラフを保存しました:", output_relayer_vs_total_png)
+print("グラフを保存:", output_relayer_vs_total_png)
 
 plt.figure(figsize=(8, 5))
 plt.scatter(chain_a_waits, total_transfer_delays)
@@ -231,7 +231,7 @@ plt.tight_layout()
 plt.savefig(output_chain_a_vs_total_png)
 plt.close()
 
-print("グラフを保存しました:", output_chain_a_vs_total_png)
+print("グラフを保存:", output_chain_a_vs_total_png)
 
 plt.figure(figsize=(8, 5))
 plt.scatter(chain_b_waits, total_transfer_delays)
@@ -243,7 +243,7 @@ plt.tight_layout()
 plt.savefig(output_chain_b_vs_total_png)
 plt.close()
 
-print("グラフを保存しました:", output_chain_b_vs_total_png)
+print("グラフを保存:", output_chain_b_vs_total_png)
 
 cumulative_average_delays = []
 cumulative_sum = 0.0
@@ -263,7 +263,7 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", output_cumulative_average_delay_png)
+print("グラフを保存:", output_cumulative_average_delay_png)
 
 plt.figure(figsize=(8, 5))
 plt.boxplot([
@@ -284,4 +284,4 @@ plt.tight_layout()
 plt.savefig(*__*)
 plt.close()
 
-print("グラフを保存しました:", output_boxplot_delay_components_png)
+print("グラフを保存:", output_boxplot_delay_components_png)

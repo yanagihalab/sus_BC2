@@ -126,7 +126,7 @@ with open(output_block_csv, "w", newline="", encoding="utf-8") as f:
     for row in block_results:
         writer.writerow(row)
 
-print("CSVを保存しました:", output_block_csv)
+print("CSVを保存:", output_block_csv)
 
 with open(output_summary_csv, "w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
@@ -144,4 +144,4 @@ with open(output_summary_csv, "w", newline="", encoding="utf-8") as f:
     for row in *__*:
         writer.writerow(row)
 
-print("CSVを保存しました:", output_summary_csv)
+print("CSVを保存:", output_summary_csv)
