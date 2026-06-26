@@ -26,3 +26,15 @@ command.env
 # Generated experiment outputs
 Day1/Proposer-visualizer/out/index.json
 Day1/Proposer-visualizer/public/out/
+
+# Generated blockchain command outputs
+instantiate_tx.json
+instantiate_result.json
+cw20_transfer_tx.json
+cw20_transfer_result.json
+
+# Temporarily private experiment scripts
+Day2/*.py
+Day3/*.py
+Day3/*.sh
+Day3/blockchain_2000_tampered.json
