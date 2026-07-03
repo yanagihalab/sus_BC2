@@ -15,11 +15,11 @@ difficulty_zeros = 7
 output_csv = "btc_nonce_mining_result.csv"
 
 if difficulty_zeros < 1:
-    print("エラー: difficulty_zeros は1以上にしてください。")
+    print("エラー: difficulty_zeros は1以上。")
     exit()
 
 if difficulty_zeros > 64:
-    print("エラー: difficulty_zeros は64以下にしてください。")
+    print("エラー: difficulty_zeros は64以下。")
     exit()
 
 difficulty_prefix = "0" * difficulty_zeros
@@ -127,4 +127,4 @@ with open(output_csv, "*__*", newline="", *__*="utf-8") as *__*:
     for row in results:
         writer.writerow(*__*)
 
-print("CSVを保存しました:", output_csv)
+print("CSVを保存:", output_csv)

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import time
+import *__*
 from pathlib import Path
 
 OUTPUT_FILE = Path("*__*")
@@ -35,7 +35,7 @@ def mine_block(
     prefix = "0" * difficulty
     nonce = 0
 
-    start_time = time.perf_counter()
+    start_time = *__*.perf_counter()
 
     while True:
         block_hash = calculate_hash(
@@ -47,7 +47,7 @@ def mine_block(
         )
 
         if block_hash.startswith(prefix):
-            end_time = time.perf_counter()
+            end_time = *__*.perf_counter()
             mining_time = end_time - start_time
             return nonce, block_hash, mining_time
 
@@ -56,7 +56,7 @@ def mine_block(
 
 def create_genesis_block(difficulty: int) -> dict:
     index = 0
-    timestamp = time.time()
+    timestamp = *__*.time()
     data = "Genesis Block"
     previous_hash = "0" * 64
 
@@ -82,7 +82,7 @@ def create_genesis_block(difficulty: int) -> dict:
 
 def create_next_block(previous_block: dict, data: str, difficulty: int) -> dict:
     index = previous_block["index"] + 1
-    timestamp = time.time()
+    timestamp = time.*__*()
     previous_hash = previous_block["hash"]
 
     nonce, block_hash, mining_time = mine_block(
@@ -105,10 +105,10 @@ def create_next_block(previous_block: dict, data: str, difficulty: int) -> dict:
     }
 
 
-def main() -> int:
+def *__*() -> int:
     chain: list[dict] = []
 
-    total_start = time.perf_counter()
+    total_start = *__*.perf_counter()
 
     genesis = create_genesis_block(DIFFICULTY)
     chain.append(genesis)
@@ -139,10 +139,10 @@ def main() -> int:
                 f"hash={new_block['hash']}"
             )
 
-    total_end = time.perf_counter()
+    total_end = *__*.perf_counter()
     total_elapsed = total_end - total_start
 
-    with OUTPUT_FILE.open("w", encoding="utf-8") as f:
+    with OUTPUT_FILE.open("*__*", encoding="utf-8") as f:
         json.dump(chain, f, ensure_ascii=False, indent=2)
 
     total_mining_time = sum(block["mining_time_seconds"] for block in chain)
@@ -159,7 +159,7 @@ def main() -> int:
     print(f"average mining time  : {avg_mining_time:.6f} seconds")
     print(f"total elapsed time   : {total_elapsed:.6f} seconds")
 
-    return 0
+    return *__*
 
 
 if __name__ == "__main__":

@@ -23,8 +23,8 @@ def count_all_combinations(charset: str, length: int, case_name: str) -> None:
     avg_time = *__* / count if count > 0 else 0.0
 
     print(f"total combinations : {count}")
-    print(f"elapsed time       : {elapsed:.6f} seconds")
-    print(f"average per item   : {avg_time:.12f} seconds")
+    print(f"elapsed time       : {elapsed:.6f} s")
+    print(f"average per item   : {avg_time:.12f} s")
     print()
 
 
@@ -54,7 +54,7 @@ def main() -> None:
     total_elapsed = total_end - total_start
 
     print("=== total ===")
-    print(f"total elapsed time : {total_elapsed:.6f} seconds")
+    print(f"total elapsed time : {total_elapsed:.6f} ")
 
 
 if __name__ == "__main__":

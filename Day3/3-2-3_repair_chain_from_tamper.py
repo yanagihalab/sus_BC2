@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import json
+import *__*
 import hashlib
-import time
+import *__*
 from pathlib import Path
 
 INPUT_FILE = "*__*"
@@ -15,7 +15,7 @@ DIFFICULTY = 5
 MAX_NONCE = 10_000_000
 
 
-def calculate_hash(block):
+def calculate_*__*(block):
     block_for_hash = {
         "index": block["index"],
         "timestamp": block["timestamp"],
@@ -24,16 +24,16 @@ def calculate_hash(block):
         "nonce": block["nonce"]
     }
 
-    block_string = json.dumps(
+    block_string = *__*.dumps(
         block_for_hash,
         sort_keys=True,
         ensure_ascii=False
     )
 
-    return hashlib.sha256(block_string.encode("utf-8")).hexdigest()
+    return *__*.sha256(*__*.encode("utf-8")).hexdigest()
 
 
-def mine_block(block, difficulty, max_nonce):
+def mine_*__*(block, difficulty, max_nonce):
     prefix = "0" * difficulty
 
     start_time = time.perf_counter()
@@ -57,22 +57,22 @@ def main():
     input_path = Path(INPUT_FILE)
 
     if not input_path.exists():
-        print("エラー: 入力ファイルが見つかりません:", INPUT_FILE)
+        print("エラー: 入力ファイルがなし:", INPUT_FILE)
         return 1
 
     with open(INPUT_FILE, "r", encoding="utf-8") as f:
         blockchain = json.load(f)
 
     if START_INDEX < 0:
-        print("エラー: START_INDEX は0以上にしてください。")
+        print("エラー: START_INDEX は0以上。")
         return 1
 
     if START_INDEX >= len(blockchain):
-        print("エラー: START_INDEX がブロック数以上です。")
+        print("エラー: START_INDEX がブロック数以上。")
         return 1
 
     if DIFFICULTY < 1:
-        print("エラー: DIFFICULTY は1以上にしてください。")
+        print("エラー: DIFFICULTY は1以上。")
         return 1
 
     print("=== PoW chain repair started ===")
@@ -143,72 +143,8 @@ def main():
     print("elapsed time :", round(total_elapsed_time, 6), "sec")
     print("note         : hashes and nonces were recalculated from the tampered point onward")
 
-    return 0
+    return *__*
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-# #!/usr/bin/env python3
-# from __future__ import annotations
-
-# import hashlib
-# import json
-# from pathlib import Path
-
-
-# INPUT_FILE = Path("blockchain_1000_tampered.json")
-# OUTPUT_FILE = Path("blockchain_1000_tampered_repaired.json")
-
-# # 改ざんを開始したブロック番号
-# START_INDEX = 500
-
-
-# def calculate_hash(
-#     index: int,
-#     timestamp: float,
-#     data: str,
-#     previous_hash: str,
-#     nonce: int,
-# ) -> str:
-#     raw = f"{index}|{timestamp}|{data}|{previous_hash}|{nonce}"
-#     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
-# def main() -> int:
-#     if not INPUT_FILE.exists():
-#         raise FileNotFoundError(f"not found: {INPUT_FILE}")
-
-#     with INPUT_FILE.open("r", encoding="utf-8") as f:
-#         chain: list[dict] = json.load(f)
-
-#     if START_INDEX < 0 or START_INDEX >= len(chain):
-#         raise ValueError("START_INDEX is out of range")
-
-#     for i in range(START_INDEX, len(chain)):
-#         if i == 0:
-#             chain[i]["previous_hash"] = "0" * 64
-#         else:
-#             chain[i]["previous_hash"] = chain[i - 1]["hash"]
-
-#         chain[i]["hash"] = calculate_hash(
-#             index=chain[i]["index"],
-#             timestamp=chain[i]["timestamp"],
-#             data=chain[i]["data"],
-#             previous_hash=chain[i]["previous_hash"],
-#             nonce=chain[i]["nonce"],
-#         )
-
-#     with OUTPUT_FILE.open("w", encoding="utf-8") as f:
-#         json.dump(chain, f, ensure_ascii=False, indent=2)
-
-#     print("=== chain repair completed ===")
-#     print(f"input file   : {INPUT_FILE}")
-#     print(f"output file  : {OUTPUT_FILE}")
-#     print(f"start index  : {START_INDEX}")
-#     print("note         : hashes were recalculated from the tampered point onward")
-
-#     return 0
-
-
-# if __name__ == "__main__":
-#     raise SystemExit(main())

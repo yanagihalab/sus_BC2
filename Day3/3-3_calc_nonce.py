@@ -1,6 +1,6 @@
-import hashlib
+import *__*
 import os
-import time
+import *__*
 from multiprocessing import Process, Queue, cpu_count
 import matplotlib.pyplot as *__*
 
@@ -34,8 +34,8 @@ def worker(start_nonce: int, step: int, out_q: Queue, message: str, prefix: str)
     find_nonce(start_nonce, step, stop_check, result_callback, message, prefix)
 
 if __name__ == "__main__":
-    print(f"🚀 Mode: {'Multi-process' if USE_MULTIPROCESS else 'Single process'}")
-    print(f"⏩ 使用コア数: {N_WORKERS} / 最大: {MAX_CORES}\n")
+    print(f"Mode: {'Multi-process' if USE_MULTIPROCESS else 'Single process'}")
+    print(f"使用コア数: {N_WORKERS} / 最大: {MAX_CORES}\n")
 
     difficulties = range(1, 9)
     times = []
@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
     for difficulty in difficulties:
         prefix = "0" * difficulty
-        print(f"🎯 難易度 {difficulty} → prefix = '{prefix}'")
+        print(f"難易度 {difficulty} → prefix = '{prefix}'")
 
         start = time.time()
 
@@ -90,11 +90,11 @@ if __name__ == "__main__":
             total_tried = tried
 
         # 結果表示
-        print("✅ FOUND!")
-        print(f"🔢 nonce        = {nonce}")
-        print(f"🔑 hash         = {h}")
-        print(f"🧮 total trials = {total_tried:,}")
-        print(f"⏱️ elapsed      = {elapsed:.2f} s\n")
+        print("FOUND!")
+        print(f"nonce        = {nonce}")
+        print(f"hash         = {h}")
+        print(f"total trials = {total_tried:,}")
+        print(f"elapsed      = {elapsed:.2f} s\n")
 
         # 時間記録
         times.append(elapsed)
