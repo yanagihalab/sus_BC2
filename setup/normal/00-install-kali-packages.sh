@@ -23,6 +23,15 @@ $SUDO apt install -y \
   curl \
   nodejs
 
+NODE_VERSION="$(node --version)"
+NODE_MAJOR="${NODE_VERSION#v}"
+NODE_MAJOR="${NODE_MAJOR%%.*}"
+if [[ ! "$NODE_MAJOR" =~ ^[0-9]+$ ]] || [ "$NODE_MAJOR" -lt 20 ]; then
+  echo "Node.js 20 or later is required; installed version: $NODE_VERSION" >&2
+  echo "Check that apt uses the current Kali rolling repository." >&2
+  exit 1
+fi
+
 echo "Installed basic packages."
 python3 --version
 git --version
