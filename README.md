@@ -59,6 +59,40 @@ cd ~/temp/sus_BC2
 このスクリプトを実行すると、標準設定ではリポジトリルートに `venv` という名前の Python 仮想環境（`~/temp/sus_BC2/venv/`）が作成され、必要なライブラリがインストールされる。
 
 <details>
+<summary>補足：一括セットアップの処理順序</summary>
+
+`wsl-kali-experiment-env.sh` は、次の順序で処理を実行する。標準設定では SSH サーバーの設定以外をすべて行う。
+各処理のコマンドと役割は、次の「補足：初期設定と一括セットアップの内容」を参照する。
+
+| 順序 | 処理 | 内容 |
+| --- | --- | --- |
+| 1 | 設定・実行条件の確認 | 各 `SETUP_*` の値、リポジトリ、`requirements.txt`、Visualizer の `package.json` を確認する。Injective を導入する場合は x86_64 が必要で、CW20 をビルドする場合は Docker の導入も有効にする。作業先と各パスを設定し、WSL 上での実行かを確認する。WSL ではない場合は警告を表示する。 |
+| 2 | Kali の更新と基本ツールの導入 | `00-install-kali-packages.sh` で、APT のパッケージ一覧更新、インストール済みパッケージの更新、基本ツールの導入を順に行う。Python 用ツール、Java 11、Node.js、npm、Git、curl、unzip、jq を導入し、Node.js が 20 以上であることと各ツールのバージョンを確認する。この段階の APT 処理にはダウンロードの再試行設定が入っている。 |
+| 3 | Python 仮想環境の作成 | リポジトリ直下に `venv/` を作成し、その環境に `requirements.txt` の `requests`、`numpy`、`scipy`、`tqdm`、`pandas`、`matplotlib` を導入する。作成先は `VENV_DIR` で変更できる。 |
+| 4 | Visualizer の依存パッケージの導入 | `08-setup-proposer-visualizer.sh` で、`Day1/Proposer-visualizer` 内の `npm install` を実行する。Visualizer の起動は別途行う。 |
+| 5 | SSH サーバーの設定（任意） | `SETUP_SSH=yes` の場合だけ、`02-setup-vscode-ssh.sh` を実行する。OpenSSH を導入し、標準ポートを `2222` に設定する。パスワード認証を有効、root ログインを無効にし、SSH サービスを再起動する。 |
+| 6 | SimBlock の取得とビルド | `03-install-simblock.sh` で依存パッケージを導入し、SimBlock のリポジトリがなければ取得する。Java 11 の JDK を選択し、Gradle の `clean` と `build` を実行する。シミュレーションの実行は別途行う。 |
+| 7 | injectived の導入 | `04-install-injectived.sh` で Linux amd64 向けの配布ファイルを取得・展開し、`injectived` を `/usr/local/bin/` に配置する。共有ライブラリが同梱されている場合は `/usr/lib/` に配置し、最後にバージョンを確認する。 |
+| 8 | Docker Engine の導入と起動 | `09-install-docker.sh` で `docker.io` を導入し、Docker サービスを起動してバージョンを確認する。標準設定では Docker グループへのユーザー追加を省略し、`hello-world` も実行しない。 |
+| 9 | CW20 サンプルの WASM ビルド | `10-build-cw20-sample.sh` で Docker への接続を確認し、必要に応じて `sudo docker` を使う。`cw-plus` のリポジトリがなければ取得し、`cosmwasm/workspace-optimizer:0.17.0` でビルドする。生成された `cw-plus/artifacts/cw20_base.wasm` を確認する。 |
+| 10 | 完了メッセージと操作方法の表示 | リポジトリ、仮想環境、外部リポジトリ・ダウンロードの保存先を表示し、仮想環境を有効にするコマンドや、SSH 設定・各機能の省略方法を案内する。標準の外部リポジトリ・ダウンロード先はリポジトリの親ディレクトリ（本書の配置では `~/temp`）である。 |
+
+Visualizer、SimBlock、Injective、Docker、CW20 は、対応する `SETUP_*` に `no` を指定すると省略できる。Docker を省略する場合は `SETUP_DOCKER=no SETUP_CW20=no` を指定する。
+主要な導入・ビルド処理が失敗すると、後続の処理を実行せず停止する。途中までの変更は自動では巻き戻さない。
+
+仮想環境は自動作成されるが、現在のターミナルで有効にするには、完了後に次を実行する。
+
+```bash
+cd ~/temp/sus_BC2
+source venv/bin/activate
+```
+
+WSL 本体の更新と Kali Linux のインストールは、スクリプト実行前に Windows 側で行う。
+ウォレット作成、送金、TokenFactory の操作、CW20 のチェーンへの登録・初期化は、一括セットアップ後の実験手順で行う。
+
+</details>
+
+<details>
 <summary>補足：初期設定と一括セットアップの内容</summary>
 
 #### 一括セットアップの対象と処理内容
@@ -68,7 +102,7 @@ cd ~/temp/sus_BC2
 環境構築は、このスクリプトの実行に集約している。標準の設定で、次の処理を順に行う。
 以下の補足では、スクリプト内で実行するコマンドとその役割を示す。通常の準備には主手順 3 を使い、補足は各処理を理解するために参照する。
 コマンド例は、リポジトリを `~/temp/sus_BC2` に配置した場合の標準パスで記載している。`WORKDIR`、`VENV_DIR`、`APP_DIR` などを変更した場合は、指定したパスに読み替える。
-一括セットアップは `set -euo pipefail` により、コマンドの失敗や未設定変数の参照を検出して停止する。以下のコードブロックは、処理ごとの説明である。
+一括セットアップは `set -euo pipefail` により、主要な処理の失敗や未設定変数の参照を検出して停止する。以下のコードブロックは、処理ごとの説明である。
 
 | 対象 | セットアップ内容 |
 | --- | --- |
@@ -93,19 +127,21 @@ cd ~/temp/sus_BC2
 一括セットアップでは、次のコマンドを実行する。
 
 ```bash
-sudo apt update
-sudo apt upgrade -y
+sudo apt-get --error-on=any -o Acquire::Retries=5 update
+sudo apt-get -o Acquire::Retries=5 --with-new-pkgs upgrade -y
 ```
 
-`apt update` は、利用可能なパッケージとバージョンの一覧を更新する。
-`apt upgrade -y` は、その一覧を使ってインストール済みパッケージを更新する。`-y` は確認への応答を自動化する指定である。
+`apt-get update` は、利用可能なパッケージとバージョンの一覧を更新する。`--error-on=any` は、更新中にエラーがあった場合に失敗として扱う指定である。
+`apt-get upgrade` は、その一覧を使ってインストール済みパッケージを更新する。`--with-new-pkgs` は更新に必要な新規パッケージの導入を許可し、`-y` は確認への応答を自動化する。
+`-o Acquire::Retries=5` は、このコマンドのダウンロード再試行回数を 5 回に設定する。
+`00-install-kali-packages.sh` 内の APT 処理が失敗した場合は、元の出力に加えて処理段階、スクリプトと行番号、実行コマンド、終了コードを表示し、後続の処理を停止する。
 
 #### 基本ツールのインストール
 
 基本ツールは、次のコマンドでインストールする。
 
 ```bash
-sudo apt install -y \
+sudo apt-get -o Acquire::Retries=5 install -y \
   python3-pip python3-venv openjdk-11-jdk \
   unzip npm jq git curl nodejs
 ```
