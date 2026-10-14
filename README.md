@@ -1,5 +1,7 @@
 # sus_BC2
 
+`injectived` の導入・設定・CLI 操作については、[docs/injective-setup.md](docs/injective-setup.md) を参照する。
+
 ## 実行手順
 
 本リポジトリの利用者は、次の順番で作業する。
@@ -58,6 +60,8 @@ cd ~/temp/sus_BC2
 
 このスクリプトを実行すると、標準設定ではリポジトリルートに `venv` という名前の Python 仮想環境（`~/temp/sus_BC2/venv/`）が作成され、必要なライブラリがインストールされる。
 
+実行中に `Configuring docker.io` の確認画面が表示された場合は、画面下部の **`<No>` を選択して `Enter` を押す**。詳しくは、折りたたみ補足の「Docker パッケージの確認画面での操作」を参照する。
+
 <details>
 <summary>補足：一括セットアップの処理順序</summary>
 
@@ -66,18 +70,18 @@ cd ~/temp/sus_BC2
 
 | 順序 | 処理 | 内容 |
 | --- | --- | --- |
-| 1 | 設定・実行条件の確認 | 各 `SETUP_*` の値、リポジトリ、`requirements.txt`、Visualizer の `package.json` を確認する。Injective を導入する場合は x86_64 が必要で、CW20 をビルドする場合は Docker の導入も有効にする。作業先と各パスを設定し、WSL 上での実行かを確認する。WSL ではない場合は警告を表示する。 |
+| 1 | 設定・実行条件の確認 | 各 `SETUP_*` の値、リポジトリ、`requirements.txt`、Visualizer の `package.json` を確認する。標準設定は x86_64 向けで、CW20 をビルドする場合は Docker の導入も有効にする。作業先と各パスを設定し、WSL 上での実行かを確認する。WSL ではない場合は警告を表示する。 |
 | 2 | Kali の更新とパッケージの導入 | `00-install-kali-packages.sh` で、APT のパッケージ一覧更新、インストール済みパッケージの更新、必要なパッケージの導入を各1回実行する。基本ツールに加え、`SETUP_DOCKER=yes` では `docker.io`、`SETUP_SSH=yes` では `openssh-server` を同じ install 処理で導入する。Node.js が 20 以上であることと各ツールのバージョンを確認する。APT のダウンロード再試行と失敗診断も、この段階に集約する。 |
 | 3 | Python 仮想環境の作成 | リポジトリ直下に `venv/` を作成し、その環境に `requirements.txt` の `requests`、`numpy`、`scipy`、`tqdm`、`pandas`、`matplotlib` を導入する。作成先は `VENV_DIR` で変更できる。 |
 | 4 | Visualizer の依存パッケージの導入 | `08-setup-proposer-visualizer.sh` で、`Day1/Proposer-visualizer` 内の `npm install` を実行する。Visualizer の起動は別途行う。 |
 | 5 | SSH サーバーの設定（任意） | `SETUP_SSH=yes` の場合だけ、`02-setup-vscode-ssh.sh` を実行する。処理順序の 2 で導入した OpenSSH の標準ポートを `2222` に設定する。パスワード認証を有効、root ログインを無効にし、SSH サービスを再起動する。 |
 | 6 | SimBlock の取得とビルド | `03-install-simblock.sh` で、導入済みのツールを確認し、SimBlock のリポジトリがなければ取得する。Java 11 の JDK を選択し、Gradle の `clean` と `build` を実行する。シミュレーションの実行は別途行う。 |
-| 7 | injectived の導入 | `04-install-injectived.sh` で Linux amd64 向けの配布ファイルを取得・展開し、`injectived` を `/usr/local/bin/` に配置する。共有ライブラリが同梱されている場合は `/usr/lib/` に配置し、最後にバージョンを確認する。 |
+| 7 | ブロックチェーン実験用 CLI の導入 | 導入内容と操作手順は [docs/injective-setup.md](docs/injective-setup.md) を参照する。 |
 | 8 | Docker Engine の起動と確認 | `09-install-docker.sh` で、処理順序の 2 で導入した Docker のサービスを起動してバージョンを確認する。標準設定では Docker グループへのユーザー追加を省略し、`hello-world` も実行しない。 |
 | 9 | CW20 サンプルの WASM ビルド | `10-build-cw20-sample.sh` で Docker への接続を確認し、必要に応じて `sudo docker` を使う。`cw-plus` のリポジトリがなければ `--depth 1` で取得し、`cosmwasm/workspace-optimizer:0.17.0` に `./contracts/cw20-base` を指定してビルドする。古い WASM とチェックサムを削除してから、生成された `cw-plus/artifacts/cw20_base.wasm` が空でないこととチェックサムを確認する。 |
 | 10 | 完了メッセージと操作方法の表示 | リポジトリ、仮想環境、外部リポジトリ・ダウンロードの保存先を表示し、仮想環境を有効にするコマンドや、SSH 設定・各機能の省略方法を案内する。標準の外部リポジトリ・ダウンロード先はリポジトリの親ディレクトリ（本書の配置では `~/temp`）である。 |
 
-Visualizer、SimBlock、Injective、Docker、CW20 は、対応する `SETUP_*` に `no` を指定すると省略できる。Docker を省略する場合は `SETUP_DOCKER=no SETUP_CW20=no` を指定する。
+Visualizer、SimBlock、Docker、CW20 は、対応する `SETUP_*` に `no` を指定すると省略できる。Docker を省略する場合は `SETUP_DOCKER=no SETUP_CW20=no` を指定する。CLI の実行条件と省略方法は [docs/injective-setup.md](docs/injective-setup.md) を参照する。
 主要な導入・ビルド処理が失敗すると、後続の処理を実行せず停止する。途中までの変更は自動では巻き戻さない。
 
 仮想環境は自動作成されるが、現在のターミナルで有効にするには、完了後に次を実行する。
@@ -88,7 +92,7 @@ source venv/bin/activate
 ```
 
 WSL 本体の更新と Kali Linux のインストールは、スクリプト実行前に Windows 側で行う。
-ウォレット作成、送金、TokenFactory の操作、CW20 のチェーンへの登録・初期化は、一括セットアップ後の実験手順で行う。
+一括セットアップ後のブロックチェーン操作は、[docs/injective-setup.md](docs/injective-setup.md) に従って行う。
 
 </details>
 
@@ -97,7 +101,7 @@ WSL 本体の更新と Kali Linux のインストールは、スクリプト実�
 
 #### 一括セットアップの対象と処理内容
 
-標準セットアップは x86_64 版 Kali Linux を対象とする。`injectived` には Linux amd64 向けの配布バイナリを使用する。
+標準セットアップは x86_64 版 Kali Linux を対象とする。CLI の導入条件は [docs/injective-setup.md](docs/injective-setup.md) を参照する。
 本書で紹介する環境構築スクリプトのコマンドは、特に指定がない限り、リポジトリルートから実行する。
 環境構築は、このスクリプトの実行に集約している。標準の設定で、次の処理を順に行う。
 APT による更新とパッケージ導入は `00-install-kali-packages.sh` にまとめている。`02`、`03`、`04`、`09` の個別スクリプトは、導入済みのパッケージを使って設定・取得・ビルド・起動を行う。
@@ -112,7 +116,7 @@ APT による更新とパッケージ導入は `00-install-kali-packages.sh` に
 | Python | `venv` という名前の仮想環境の作成と `requirements.txt` のライブラリの導入 |
 | Proposer Visualizer | Node.js 20 以降の確認と npm 依存パッケージの導入 |
 | SimBlock | ソースコードの取得と Java 11 によるビルド |
-| injectived | CLI と共有ライブラリの導入 |
+| 実験用 CLI | 導入内容は [docs/injective-setup.md](docs/injective-setup.md) を参照 |
 | Docker / CW20 | `00` で Docker を導入し、`09` で起動。CW20 サンプルの取得と `cw20-base` の WASM ビルド |
 
 完了後は、後述の各項目に従って仮想環境の有効化、アプリの起動、実験を行う。
@@ -189,6 +193,31 @@ node --version
 npm --version
 jq --version
 ```
+
+#### Docker パッケージの確認画面での操作
+
+`wsl-kali-experiment-env.sh` の実行中、`00-install-kali-packages.sh` によるパッケージの導入・更新で、次の `Configuring docker.io` の確認画面が表示されることがある。
+APT の `-y` を指定していても、パッケージ設定の確認画面では入力が必要になる場合がある。
+
+![docker.io の設定画面。将来の purge 時に Docker データを自動削除するかを尋ねており、画面下部の No が選択されている](docs/images/docker-io-purge-confirmation.png)
+
+上の画像では `<No>` が選択されているため、そのまま `Enter` キーを押して進む。
+
+```text
+Configuring docker.io
+Automatically remove Docker data if package is purged?
+<Yes>    <No>
+```
+
+この画面では、次の操作で進む。
+
+1. 画面下部の **`<No>`** を選択する。`<Yes>` が選択されている場合は、`Tab` キーで `<No>` に切り替える。
+2. **`Enter` キー**を押して確定する。すでに `<No>` が選択されている場合は、そのまま `Enter` を押す。
+3. 確認画面が閉じ、パッケージの導入・更新が再開するので、そのまま完了を待つ。
+
+これは、将来 `docker.io` パッケージを `purge`（設定ファイルも含めた削除）したときに、`/var/lib/docker` にある Docker のイメージ・コンテナ・ボリュームも自動削除するかを決める設定である。
+`No` は、そのときも Docker のデータを残す設定であり、この実験手順では `No` を選ぶ。`Yes` は、将来の `purge` 時に Docker のデータも削除する設定になる。
+この画面で確定した時点で、Docker のデータが削除されるわけではない。
 
 #### Python 仮想環境（venv）の作成と利用
 
@@ -294,28 +323,6 @@ chmod +x gradlew
 `chmod +x gradlew` は Gradle Wrapper に実行権限を付ける。
 `clean` は前回のビルド出力を削除し、`build` はソースコードをビルドする。
 SimBlock のシミュレーション実行は、後述の `./gradlew :simulator:run` で行う。
-
-#### injectived の導入
-
-`00-install-kali-packages.sh` で導入した `wget` と `unzip` を使い、Linux amd64 向けの配布ファイルを取得し、CLI と共有ライブラリを配置する。
-
-```bash
-mkdir -p ~/temp
-cd ~/temp
-wget -O linux-amd64.zip https://github.com/InjectiveFoundation/injective-core/releases/latest/download/linux-amd64.zip
-unzip -o linux-amd64.zip
-chmod +x injectived
-sudo mv injectived /usr/local/bin/
-if [ -f libwasmvm.x86_64.so ]; then
-  sudo mv libwasmvm.x86_64.so /usr/lib/
-  sudo ldconfig
-fi
-injectived version
-```
-
-`wget -O` は保存するファイル名を指定してダウンロードし、`unzip -o` は既存ファイルを上書きして展開する。
-`/usr/local/bin/` は CLI の配置先である。共有ライブラリが同梱されている場合は `/usr/lib/` に配置し、`ldconfig` でライブラリの検索情報を更新する。
-最後に `injectived version` で起動できることを確認する。
 
 #### Docker の起動と確認
 
@@ -502,282 +509,10 @@ cd ~/temp/simblock
 ./gradlew :simulator:run
 ```
 
-## injectived の導入・ウォレットの作成・送金
+## ブロックチェーン実験
 
-`injectived` の導入は、主手順 3 の一括セットアップで完了する。
-ウォレットの作成と送金（`bank send`）には、次のスクリプトを使用する。
-
-| 操作 | スクリプト |
-| --- | --- |
-| ウォレットの作成・確認 | [create-test-wallet.sh](scripts/injectived/create-test-wallet.sh) |
-| INJ の送金 | [bank-send.sh](scripts/injectived/bank-send.sh) |
-
-`injectived` 用の環境変数は、次のシェルスクリプトで現在のシェルに読み込む。
-
-```bash
-cd ~/temp/sus_BC2
-source scripts/injectived/load-env.sh
-```
-
-<details>
-<summary>補足：環境変数の読み込みとウォレット作成のコマンド</summary>
-
-#### 環境変数の設定
-
-`load-env.sh` は `source` で読み込み、現在のシェルに `export` で値を設定する。
-`${変数:-既定値}` は、変数が未設定または空の場合に既定値を使う指定である。すでに設定した値は保持される。
-Injective 用の設定処理は次のとおりである。
-
-```bash
-export KEY_NAME="${KEY_NAME:-testwallet}"
-export CHAIN_ID="${CHAIN_ID:-injective-888}"
-export NODE="${NODE:-https://injective-testnet-rpc.publicnode.com:443}"
-export GAS_PRICES="${GAS_PRICES:-500000000inj}"
-export GAS="${GAS:-1000000}"
-export BANK_SEND_GAS="${BANK_SEND_GAS:-200000}"
-export AMOUNT="${AMOUNT:-100000000inj}"
-export RECIPIENT_ADDR="${RECIPIENT_ADDR:-}"
-export KEYRING_BACKEND="${KEYRING_BACKEND:-test}"
-
-if command -v injectived >/dev/null 2>&1; then
-  export MY_ADDR="${MY_ADDR:-$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND" 2>/dev/null || true)}"
-else
-  export MY_ADDR="${MY_ADDR:-}"
-fi
-export ADDR="${ADDR:-$MY_ADDR}"
-```
-
-`KEY_NAME` は使用する鍵の名前、`CHAIN_ID` と `NODE` は接続先、`GAS_PRICES` はガス単価である。
-`GAS` はガス上限、`BANK_SEND_GAS` は INJ 送金用のガス上限、`AMOUNT` は送金量、`RECIPIENT_ADDR` は送金先を表す。
-`KEYRING_BACKEND` は鍵の保存方式を指定する。`keys show -a` は、鍵に対応するアドレスを取得する。
-鍵がまだない場合、アドレスは空のままとなるため、作成後に取得する。
-
-#### ウォレットの作成とアドレス取得
-
-`create-test-wallet.sh` は、同じ名前の鍵が存在するか確認し、未作成の場合だけウォレットを作成する。
-
-```bash
-if ! injectived keys show "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" >/dev/null 2>&1; then
-  injectived keys add "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND"
-else
-  echo "Wallet already exists: $KEY_NAME"
-fi
-MY_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
-```
-
-`keys add` は鍵とウォレットを作成する。作成後の `MY_ADDR` を Faucet や残高照会に使用する。
-この手動例では現在のシェルにアドレスが設定される。補助スクリプトを実行した場合は、表示される案内に従って環境変数を読み込む。
-
-</details>
-
-ウォレット作成後、[Injective testnet の Faucet](https://cloud.google.com/application/web3/faucet/injective/testnet) で INJ を取得し、残高を確認する。
-
-```bash
-injectived query bank balances "$MY_ADDR" --node="$NODE"
-```
-
-送金時は `RECIPIENT_ADDR` と `AMOUNT` を設定し、`CONFIRM_SEND=yes` を指定して `bank-send.sh` を実行する。
-
-<details>
-<summary>補足：bank-send.sh が実行する送金コマンド</summary>
-
-送信元の鍵、送金先、送金量を指定して、次のコマンドを実行する。例の送金先は実際のアドレスに置き換える。
-
-```bash
-RECIPIENT_ADDR="inj1送金先アドレス"
-AMOUNT="100000000inj"
-BANK_SEND_GAS="${BANK_SEND_GAS:-${GAS:-200000}}"
-injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "$AMOUNT" \
-  --from="$KEY_NAME" \
-  --keyring-backend "$KEYRING_BACKEND" \
-  --chain-id="$CHAIN_ID" \
-  --node="$NODE" \
-  --gas-prices="$GAS_PRICES" \
-  --gas="$BANK_SEND_GAS" \
-  --broadcast-mode sync \
-  -y
-```
-
-`--from` は署名に使う鍵、`--chain-id` と `--node` は接続先を指定する。
-`--gas-prices` と `--gas` は手数料計算に使う設定である。送金には `BANK_SEND_GAS` を使う。
-`--broadcast-mode sync` はトランザクションを送信して応答を受け取る方式で、ブロックへの取り込み結果は TxHash で別途確認する。
-`-y` は CLI の確認を自動承認する指定である。
-`CONFIRM_SEND=yes` は補助スクリプト内の実行条件であり、直接 `injectived` を実行する場合のオプションではない。
-
-</details>
-
-### トランザクションの確認
-
-送金、TokenFactory、CW20 などの書き込み操作で TxHash が返ったら、次のコマンドで結果を確認する。
-ブロックに取り込まれ、`code` が `0` であることを確認する。
-
-```bash
-TXHASH="ここにTxHashを入れる"
-injectived q tx "$TXHASH" \
-  --chain-id="$CHAIN_ID" \
-  --node="$NODE" \
-  --output json | jq
-```
-
-## TokenFactory / MTK の実行
-
-TokenFactory を用いた MTK の作成、メタデータの設定、ミント（発行）、残高確認、送金には、[07-tokenfactory-mtk.sh](setup/normal/07-tokenfactory-mtk.sh) を使用する。
-
-TokenFactory 用の環境変数は、次のシェルスクリプトで現在のシェルに読み込む。
-
-```bash
-cd ~/temp/sus_BC2
-source scripts/tokenfactory/load-env.sh
-```
-
-操作一覧は、次のコマンドで確認する。
-
-```bash
-./setup/normal/07-tokenfactory-mtk.sh help
-```
-
-`create-denom`、`set-metadata`、`mint`、`balance`、`send` の各操作を指定できる。
-`create-denom` で denom を作成してから、メタデータ設定、ミント、送金へ進む。同じ denom の作成は一度だけ行う。
-書き込み操作には `CONFIRM_TX=yes` と、作成手数料・ガス手数料を支払うための INJ 残高が必要である。
-メタデータ設定の実行前に、補足の「メタデータの設定」に記載した CLI 引数の確認事項を参照する。
-
-<details>
-<summary>補足：TokenFactory の環境設定と各操作のコマンド</summary>
-
-#### 環境変数と denom の組み立て
-
-鍵名、チェーン、RPC、ガス単価、鍵の保存方式は Injective の共通設定と同じである。
-TokenFactory 用の `load-env.sh` は、次の固有設定を読み込む。
-
-```bash
-export GAS="${GAS:-300000}"
-export SUBDENOM="${SUBDENOM:-mtk}"
-export RECIPIENT_ADDR="${RECIPIENT_ADDR:-}"
-export SEND_AMOUNT="${SEND_AMOUNT:-1000000}"
-if command -v injectived >/dev/null 2>&1; then
-  export CREATOR_ADDR="${CREATOR_ADDR:-$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND" 2>/dev/null || true)}"
-else
-  export CREATOR_ADDR="${CREATOR_ADDR:-}"
-fi
-if [ -n "$CREATOR_ADDR" ]; then
-  export DENOM="${DENOM:-factory/${CREATOR_ADDR}/${SUBDENOM}}"
-else
-  export DENOM="${DENOM:-}"
-fi
-```
-
-`CREATOR_ADDR` は作成者のアドレス、`SUBDENOM` はトークン名の末尾部分である。
-完全な denom は `factory/作成者アドレス/subdenom` の形式になる。
-補助スクリプトの各操作では、鍵からアドレスを取得し、denom を組み立て直す。
-以下の手動例も、使用する鍵から値を取得する。ガス上限の例は `300000` とする。
-
-```bash
-GAS=300000
-CREATOR_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
-DENOM="factory/${CREATOR_ADDR}/${SUBDENOM}"
-```
-
-`load-env.sh` は既存の `GAS` を保持するため、操作に合わせてガス値を指定する。
-`07-tokenfactory-mtk.sh env` は設定を画面に表示する操作であり、現在のシェルへの読み込みは `source` で行う。
-
-#### denom の作成
-
-`create-denom` では、subdenom、名称、記号、小数桁数を指定する。
-
-```bash
-injectived tx tokenfactory create-denom \
-  "$SUBDENOM" "My Token" "MTK" 6 \
-  --from="$KEY_NAME" \
-  --keyring-backend "$KEYRING_BACKEND" \
-  --chain-id="$CHAIN_ID" \
-  --node="$NODE" \
-  --gas-prices="$GAS_PRICES" \
-  --gas="$GAS" \
-  -y
-```
-
-作成トランザクションの成功を確認してから、以降の操作へ進む。
-
-#### メタデータの設定
-
-名称、説明、表示単位などを登録する。以下は現在のスクリプトが使う引数を示したものである。
-
-```bash
-injectived tx tokenfactory set-denom-metadata \
-  "My Token Description" \
-  "$DENOM" \
-  "MTK" \
-  "My Token" \
-  "MTK" \
-  "" \
-  "" \
-  "[{\"denom\":\"$DENOM\",\"exponent\":0,\"aliases\":[]},{\"denom\":\"MTK\",\"exponent\":6,\"aliases\":[]}]" \
-  10 \
-  6 \
-  --from="$KEY_NAME" \
-  --keyring-backend "$KEYRING_BACKEND" \
-  --chain-id="$CHAIN_ID" \
-  --node="$NODE" \
-  --gas-prices="$GAS_PRICES" \
-  --gas="$GAS" \
-  -y
-```
-
-単位の JSON では、最小単位の exponent を `0`、表示単位 `MTK` の exponent を `6` としている。
-現行スクリプトの末尾引数 `10 6` には、CLI の仕様との確認が必要である。
-[公式の公開ソース v1.18.0](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/client/cli/tx.go#L219-L267) では、末尾2引数は `decimals` と `shouldDisableAdminBurn` である。
-この仕様で `10 6` を渡すと、小数桁数は `10`、管理者の burn の無効化は `false`（文字列 `true` の場合だけ有効）として扱われ、作成時と単位 JSON の `6` 桁設定に一致しない。
-[公式のトークン作成ガイド](https://docs.injective.network/developers-defi/token-launch) には9引数の例もあるため、実行前に導入した CLI の引数を次のコマンドで確認する。
-
-```bash
-injectived tx tokenfactory set-denom-metadata --help
-```
-
-上記のコードブロックは現在のスクリプト内容を示したものであり、引数の修正方針は使用する CLI の仕様に合わせて決める。
-
-#### ミント・残高確認・送金
-
-ミントは、数量と denom を連結し、発行先のアドレスを指定する。
-
-```bash
-MINT_AMOUNT="${MINT_AMOUNT:-1000000000}"
-injectived tx tokenfactory mint "${MINT_AMOUNT}${DENOM}" "$CREATOR_ADDR" \
-  --from="$KEY_NAME" \
-  --keyring-backend "$KEYRING_BACKEND" \
-  --chain-id="$CHAIN_ID" \
-  --node="$NODE" \
-  --gas-prices="$GAS_PRICES" \
-  --gas="$GAS" \
-  -y
-```
-
-`MINT_AMOUNT` は最小単位の数量で、変数自体には denom を含めない。
-次のコマンドは、作成者の銀行残高を JSON で取得する。
-
-```bash
-injectived query bank balances "$CREATOR_ADDR" \
-  --node="$NODE" --chain-id="$CHAIN_ID" -o json | jq
-```
-
-送金は、宛先と最小単位の数量を設定してから実行する。
-
-```bash
-RECIPIENT_ADDR="inj1送金先アドレス"
-SEND_AMOUNT="${SEND_AMOUNT:-1000000}"
-injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "${SEND_AMOUNT}${DENOM}" \
-  --from="$KEY_NAME" \
-  --keyring-backend "$KEYRING_BACKEND" \
-  --chain-id="$CHAIN_ID" \
-  --node="$NODE" \
-  --gas-prices="$GAS_PRICES" \
-  --gas="$GAS" \
-  -y
-```
-
-`CONFIRM_TX=yes` は補助スクリプト側の実行条件である。直接 CLI を使う場合は、上記のコマンドで処理を実行する。
-各書き込み操作の結果は、返された TxHash で確認する。
-
-</details>
+`injectived` を使う CLI 操作は、[docs/injective-setup.md](docs/injective-setup.md) を参照する。
+主手順 3 の環境構築後、同文書の手順に従って実験を進める。
 
 ## Proposer Visualizer の起動
 
@@ -820,202 +555,6 @@ npm run dev -- --host 0.0.0.0
 ```
 
 `node_modules/`、ビルド出力、生成されたマニフェストは Git の管理対象外である。
-
-## CW20 コントラクトの実行
-
-Docker / CosmWasm 環境の構築と、CW20 サンプルの取得・WASM のビルドは、主手順 3 の一括セットアップで完了する。
-生成された `~/temp/cw-plus/artifacts/cw20_base.wasm` をチェーンに登録するには、[11-store-cw20-code.sh](setup/normal/11-store-cw20-code.sh) を使用する。
-
-コードの登録には `CONFIRM_TX=yes` を指定する。登録用のガス設定例は `GAS=3000000` である。
-
-CW20 用の環境変数は、次のシェルスクリプトで現在のシェルに読み込む。
-
-```bash
-cd ~/temp/sus_BC2
-source scripts/CW20/load-env.sh
-```
-
-初期化メッセージ（instantiate message）は、次のシェルスクリプトで作成する。
-
-```bash
-cd ~/temp/sus_BC2
-source scripts/CW20/load-env.sh
-scripts/CW20/create-instantiate-msg.sh
-```
-
-このスクリプトは `instantiate_msg.json` を生成する。
-CW20 の symbol は英字またはハイフンの3〜12文字で指定する。TokenFactory の `factory/.../mtk` という denom は symbol として使用できない。
-
-<details>
-<summary>補足：CW20 の環境設定・コード登録・初期化・照会・送金・ミント</summary>
-
-#### 環境変数とコード登録
-
-CW20 用の `load-env.sh` は共通の鍵・接続設定に加え、次の保存先と操作用の変数を設定する。
-
-```bash
-export GAS="${GAS:-300000}"
-export WORKDIR="${WORKDIR:-$HOME/temp}"
-export CW_PLUS_DIR="${CW_PLUS_DIR:-$WORKDIR/cw-plus}"
-export WASM_PATH="${WASM_PATH:-$CW_PLUS_DIR/artifacts/cw20_base.wasm}"
-export CODE_ID="${CODE_ID:-}"
-export CONTRACT_ADDR="${CONTRACT_ADDR:-}"
-export RECIPIENT_ADDR="${RECIPIENT_ADDR:-}"
-export CW20_SEND_AMOUNT="${CW20_SEND_AMOUNT:-1000000}"
-export CW20_MINT_AMOUNT="${CW20_MINT_AMOUNT:-1000000}"
-if command -v injectived >/dev/null 2>&1; then
-  export SENDER_ADDR="${SENDER_ADDR:-$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND" 2>/dev/null || true)}"
-else
-  export SENDER_ADDR="${SENDER_ADDR:-}"
-fi
-export MY_ADDR="${MY_ADDR:-$SENDER_ADDR}"
-```
-
-`WASM_PATH` はビルド済みコードの保存先である。
-`11-store-cw20-code.sh` は、このファイルの存在と `CONFIRM_TX=yes` を確認した後、次の登録コマンドを実行する。
-以下の手動例では、コード登録用のガス上限を明示している。
-
-```bash
-GAS=3000000
-injectived tx wasm store "$WASM_PATH" \
-  --from="$KEY_NAME" \
-  --keyring-backend "$KEYRING_BACKEND" \
-  --chain-id="$CHAIN_ID" \
-  --node="$NODE" \
-  --gas-prices="$GAS_PRICES" \
-  --gas="$GAS"
-```
-
-`store` は WASM コードをチェーンへ登録する操作で、成功後に code ID を取得できる。
-このコマンドには `-y` がないため、CLI の確認に応答して実行する。
-`CONFIRM_TX` は補助スクリプトの実行条件であり、直接 CLI を使う例では指定しない。
-
-#### 初期化メッセージの作成
-
-`create-instantiate-msg.sh` は、次の値を使って初期残高と minter を含む JSON を作成する。
-`CREATOR_ADDR` が未設定の場合は、鍵からアドレスを取得する。
-
-```bash
-OUTPUT_FILE="${OUTPUT_FILE:-instantiate_msg.json}"
-TOKEN_NAME="${TOKEN_NAME:-My Token}"
-TOKEN_SYMBOL="${TOKEN_SYMBOL:-MTK}"
-TOKEN_DECIMALS="${TOKEN_DECIMALS:-6}"
-INITIAL_BALANCE="${INITIAL_BALANCE:-1000000}"
-if ! echo "$TOKEN_SYMBOL" | grep -Eq '^[A-Za-z-]{3,12}$'; then
-  echo "symbol は英字またはハイフンの3〜12文字で指定してください" >&2
-  exit 1
-fi
-if [ -z "${CREATOR_ADDR:-}" ]; then
-  CREATOR_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
-fi
-
-cat > "$OUTPUT_FILE" <<EOF
-{
-  "name": "$TOKEN_NAME",
-  "symbol": "$TOKEN_SYMBOL",
-  "decimals": $TOKEN_DECIMALS,
-  "initial_balances": [
-    {
-      "address": "$CREATOR_ADDR",
-      "amount": "$INITIAL_BALANCE"
-    }
-  ],
-  "mint": {
-    "minter": "$CREATOR_ADDR"
-  },
-  "marketing": null
-}
-EOF
-jq . "$OUTPUT_FILE"
-```
-
-`cat > ... <<EOF` は、`EOF` までの内容を変数展開してファイルに書き出す。
-`initial_balances` は初期残高の宛先と最小単位の数量、`mint.minter` は追加発行できるアドレスを指定する。
-`jq .` は生成した JSON の構文と内容を確認する。
-
-#### コントラクトの初期化
-
-コード登録時の TxHash を使って「トランザクションの確認」のコマンドを実行し、結果の `events` から `code_id` を確認する。
-取得した値を `CODE_ID` に設定し、初期化メッセージを使ってコントラクトを作成する。
-以下では、コード登録用に設定したガス上限を、初期化・送金・ミントで使う設定例の `300000` に変更する。`source` は既存の `GAS` を保持するため、この変更を明示している。
-
-```bash
-GAS=300000
-CODE_ID="取得したcode_id"
-source scripts/CW20/load-env.sh
-injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
-  --from="$KEY_NAME" \
-  --keyring-backend "$KEYRING_BACKEND" \
-  --chain-id="$CHAIN_ID" \
-  --node="$NODE" \
-  --label "cw20-mtk-sample" \
-  --no-admin \
-  --gas-prices="$GAS_PRICES" \
-  --gas="$GAS" \
-  --output json \
-  -y
-```
-
-初期化の TxHash で結果を確認し、`events` 内の `_contract_address` または `contract_address` の値を `CONTRACT_ADDR` に設定する。
-`CODE_ID` は保存済みコードの番号、`CONTRACT_ADDR` は作成したコントラクトのアドレスであり、別の値である。
-
-```bash
-CONTRACT_ADDR="取得したcontract_address"
-source scripts/CW20/load-env.sh
-```
-
-#### トークン情報と残高の照会
-
-```bash
-injectived q wasm contract-state smart "$CONTRACT_ADDR" \
-  '{"token_info":{}}' \
-  --node "$NODE" --output json | jq
-
-injectived q wasm contract-state smart "$CONTRACT_ADDR" \
-  '{"balance":{"address":"'"$SENDER_ADDR"'"}}' \
-  --node "$NODE" --output json | jq
-```
-
-#### 送金
-
-送金先と送金量を設定してから実行する。数量は最小単位で指定し、decimals が `6` の場合、`1000000` が `1 MTK` に相当する。
-
-```bash
-RECIPIENT_ADDR="inj1送金先アドレス"
-CW20_SEND_AMOUNT="1000000"
-injectived tx wasm execute "$CONTRACT_ADDR" \
-  '{"transfer":{"recipient":"'"$RECIPIENT_ADDR"'","amount":"'"$CW20_SEND_AMOUNT"'"}}' \
-  --from "$KEY_NAME" \
-  --keyring-backend "$KEYRING_BACKEND" \
-  --chain-id "$CHAIN_ID" \
-  --node "$NODE" \
-  --gas-prices "$GAS_PRICES" \
-  --gas "$GAS" \
-  --output json \
-  -y
-```
-
-#### ミント
-
-初期化時に設定した minter の鍵を `KEY_NAME` に指定し、環境変数を読み込んでから実行する。
-
-```bash
-source scripts/CW20/load-env.sh
-injectived tx wasm execute "$CONTRACT_ADDR" \
-  '{"mint":{"recipient":"'"$SENDER_ADDR"'","amount":"'"$CW20_MINT_AMOUNT"'"}}' \
-  --from "$KEY_NAME" \
-  --keyring-backend "$KEYRING_BACKEND" \
-  --chain-id "$CHAIN_ID" \
-  --node "$NODE" \
-  --gas-prices "$GAS_PRICES" \
-  --gas "$GAS" \
-  --output json \
-  -y
-```
-
-送金・ミント後も、返された TxHash で結果を確認する。
-
-</details>
 
 ## 困ったとき
 
@@ -1065,7 +604,7 @@ SSH サーバーの導入・設定には、一括セットアップを `SETUP_SS
 ## 補足
 
 - [requirements.txt](requirements.txt) には、実験で使用する Python ライブラリを記載している。
-- [docs/injective-setup.md](docs/injective-setup.md) には、過去の環境構築や実験で使用したコマンド例を記載している。
+- [docs/injective-setup.md](docs/injective-setup.md) には、CLI の導入、ウォレット作成、送金、TokenFactory / MTK、CW20 のチェーン操作を記載している。
 - 秘密鍵、ニーモニック、個人用 RPC 認証情報などはコミットしないこと。
 
 ## Kali Linux を WSL から登録解除する場合
