@@ -181,9 +181,13 @@ chmod +x gradlew
 
 ## injectived の導入・ウォレットの作成・送金
 
-`injectived` の導入、ウォレットの作成、Faucet の利用、残高確認、送金（`bank send`）の手順は、次の README を参照する。
+`injectived` の導入、ウォレットの作成、送金（`bank send`）には、次のスクリプトを使用する。
 
-- [injectived README](scripts/injectived/README.md)
+| 操作 | スクリプト |
+| --- | --- |
+| injectived の導入 | [install-injectived.sh](scripts/injectived/install-injectived.sh) |
+| ウォレットの作成・確認 | [create-test-wallet.sh](scripts/injectived/create-test-wallet.sh) |
+| INJ の送金 | [bank-send.sh](scripts/injectived/bank-send.sh) |
 
 `injectived` 用の環境変数は、次のシェルスクリプトで現在のシェルに読み込む。
 
@@ -192,11 +196,30 @@ cd ~/temp/sus_BC2
 source scripts/injectived/load-env.sh
 ```
 
+ウォレット作成後、[Injective testnet の Faucet](https://cloud.google.com/application/web3/faucet/injective/testnet) で INJ を取得し、残高を確認する。
+
+```bash
+injectived query bank balances "$MY_ADDR" --node="$NODE"
+```
+
+送金時は `RECIPIENT_ADDR` と `AMOUNT` を設定し、`CONFIRM_SEND=yes` を指定して `bank-send.sh` を実行する。
+
+### トランザクションの確認
+
+送金、TokenFactory、CW20 などの書き込み操作で TxHash が返ったら、次のコマンドで結果を確認する。
+ブロックに取り込まれ、`code` が `0` であることを確認する。
+
+```bash
+TXHASH="ここにTxHashを入れる"
+injectived q tx "$TXHASH" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --output json | jq
+```
+
 ## TokenFactory / MTK の実行
 
-TokenFactory を用いた MTK の作成、メタデータの設定、ミント（発行）、送金の手順と確認事項は、次の README を参照する。
-
-- [TokenFactory MTK README](scripts/tokenfactory/README.md)
+TokenFactory を用いた MTK の作成、メタデータの設定、ミント（発行）、残高確認、送金には、[07-tokenfactory-mtk.sh](setup/normal/07-tokenfactory-mtk.sh) を使用する。
 
 TokenFactory 用の環境変数は、次のシェルスクリプトで現在のシェルに読み込む。
 
@@ -205,10 +228,21 @@ cd ~/temp/sus_BC2
 source scripts/tokenfactory/load-env.sh
 ```
 
+操作一覧は、次のコマンドで確認する。
+
+```bash
+./setup/normal/07-tokenfactory-mtk.sh help
+```
+
+`create-denom`、`set-metadata`、`mint`、`balance`、`send` の各操作を指定できる。
+`create-denom` で denom を作成してから、メタデータ設定、ミント、送金へ進む。同じ denom の作成は一度だけ行う。
+書き込み操作には `CONFIRM_TX=yes` と、作成手数料・ガス手数料を支払うための INJ 残高が必要である。
+
 ## Proposer Visualizer の環境構築
 
 Proposer Visualizer は、Day1 の実験で作成した提案者の系列（proposer sequence）を CSV ファイルから読み込み、ブラウザで可視化する Vite + React アプリである。
-このアプリを使うには、Python とは別に Node.js と npm が必要である。
+このアプリを使うには、Python とは別に Node.js 20 以降と npm が必要である。
+CSV ファイルは `Day1/Proposer-visualizer/out/` に配置する。サンプルとして `proposer_sequence.csv` を含めている。
 
 ```bash
 cd ~/temp/sus_BC2
@@ -244,9 +278,15 @@ npm install
 
 ## CW20 コントラクト用の Docker / CosmWasm 環境の構築と実行
 
-CW20 コントラクト用の Docker / CosmWasm 環境の構築、WASM のビルド、コードの登録（`store`）、コントラクトの初期化（`instantiate`）、照会（`query`）、送金（`transfer`）、ミント（`mint`）の手順は、次の README を参照する。
+CW20 コントラクト用の Docker / CosmWasm 環境の構築、WASM のビルド、コードの登録（`store`）には、次のスクリプトを使用する。
 
-- [CW20 README](scripts/CW20/README.md)
+| 操作 | スクリプト |
+| --- | --- |
+| Docker の導入 | [09-install-docker.sh](setup/normal/09-install-docker.sh) |
+| CW20 サンプルの取得・WASM のビルド | [10-build-cw20-sample.sh](setup/normal/10-build-cw20-sample.sh) |
+| WASM コードの登録 | [11-store-cw20-code.sh](setup/normal/11-store-cw20-code.sh) |
+
+コードの登録には `CONFIRM_TX=yes` を指定する。登録用のガス設定例は `GAS=3000000` である。
 
 CW20 用の環境変数は、次のシェルスクリプトで現在のシェルに読み込む。
 
@@ -262,6 +302,94 @@ cd ~/temp/sus_BC2
 source scripts/CW20/load-env.sh
 scripts/CW20/create-instantiate-msg.sh
 ```
+
+このスクリプトは `instantiate_msg.json` を生成する。
+CW20 の symbol は英字またはハイフンの3〜12文字で指定する。TokenFactory の `factory/.../mtk` という denom は symbol として使用できない。
+
+<details>
+<summary>CW20 の初期化・照会・送金・ミント</summary>
+
+#### コントラクトの初期化
+
+コード登録時の TxHash を使って「トランザクションの確認」のコマンドを実行し、結果の `events` から `code_id` を確認する。
+取得した値を `CODE_ID` に設定し、初期化メッセージを使ってコントラクトを作成する。
+
+```bash
+CODE_ID="取得したcode_id"
+source scripts/CW20/load-env.sh
+injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
+  --from="$KEY_NAME" \
+  --keyring-backend "$KEYRING_BACKEND" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --label "cw20-mtk-sample" \
+  --no-admin \
+  --gas-prices="$GAS_PRICES" \
+  --gas="$GAS" \
+  --output json \
+  -y
+```
+
+初期化の TxHash で結果を確認し、`events` 内の `_contract_address` または `contract_address` の値を `CONTRACT_ADDR` に設定する。
+`CODE_ID` は保存済みコードの番号、`CONTRACT_ADDR` は作成したコントラクトのアドレスであり、別の値である。
+
+```bash
+CONTRACT_ADDR="取得したcontract_address"
+source scripts/CW20/load-env.sh
+```
+
+#### トークン情報と残高の照会
+
+```bash
+injectived q wasm contract-state smart "$CONTRACT_ADDR" \
+  '{"token_info":{}}' \
+  --node "$NODE" --output json | jq
+
+injectived q wasm contract-state smart "$CONTRACT_ADDR" \
+  '{"balance":{"address":"'"$SENDER_ADDR"'"}}' \
+  --node "$NODE" --output json | jq
+```
+
+#### 送金
+
+送金先と送金量を設定してから実行する。数量は最小単位で指定し、decimals が `6` の場合、`1000000` が `1 MTK` に相当する。
+
+```bash
+RECIPIENT_ADDR="inj1送金先アドレス"
+CW20_SEND_AMOUNT="1000000"
+injectived tx wasm execute "$CONTRACT_ADDR" \
+  '{"transfer":{"recipient":"'"$RECIPIENT_ADDR"'","amount":"'"$CW20_SEND_AMOUNT"'"}}' \
+  --from "$KEY_NAME" \
+  --keyring-backend "$KEYRING_BACKEND" \
+  --chain-id "$CHAIN_ID" \
+  --node "$NODE" \
+  --gas-prices "$GAS_PRICES" \
+  --gas "$GAS" \
+  --output json \
+  -y
+```
+
+#### ミント
+
+初期化時に設定した minter の鍵を `KEY_NAME` に指定し、環境変数を読み込んでから実行する。
+
+```bash
+source scripts/CW20/load-env.sh
+injectived tx wasm execute "$CONTRACT_ADDR" \
+  '{"mint":{"recipient":"'"$SENDER_ADDR"'","amount":"'"$CW20_MINT_AMOUNT"'"}}' \
+  --from "$KEY_NAME" \
+  --keyring-backend "$KEYRING_BACKEND" \
+  --chain-id "$CHAIN_ID" \
+  --node "$NODE" \
+  --gas-prices "$GAS_PRICES" \
+  --gas "$GAS" \
+  --output json \
+  -y
+```
+
+送金・ミント後も、返された TxHash で結果を確認する。
+
+</details>
 
 ## 困ったとき
 
