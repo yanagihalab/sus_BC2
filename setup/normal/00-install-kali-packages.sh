@@ -10,9 +10,30 @@ else
   exit 1
 fi
 
-$SUDO apt update
-$SUDO apt upgrade -y
-$SUDO apt install -y \
+run_apt() {
+  local stage="$1"
+  local line="${BASH_LINENO[0]}"
+  shift
+
+  printf '==> %s\n' "$stage"
+  if "$@"; then
+    return 0
+  else
+    local status=$?
+    printf 'APT stage failed: %s\nScript: %s:%s\nCommand:' \
+      "$stage" "${BASH_SOURCE[0]}" "$line" >&2
+    printf ' %q' "$@" >&2
+    printf '\nExit code: %s\n' "$status" >&2
+    exit "$status"
+  fi
+}
+
+run_apt "Updating APT package indexes" \
+  $SUDO apt-get --error-on=any -o Acquire::Retries=5 update
+run_apt "Upgrading installed packages" \
+  $SUDO apt-get -o Acquire::Retries=5 --with-new-pkgs upgrade -y
+run_apt "Installing development dependencies" \
+  $SUDO apt-get -o Acquire::Retries=5 install -y \
   python3-pip \
   python3-venv \
   openjdk-11-jdk \
@@ -28,14 +49,14 @@ NODE_MAJOR="${NODE_VERSION#v}"
 NODE_MAJOR="${NODE_MAJOR%%.*}"
 if [[ ! "$NODE_MAJOR" =~ ^[0-9]+$ ]] || [ "$NODE_MAJOR" -lt 20 ]; then
   echo "Node.js 20 or later is required; installed version: $NODE_VERSION" >&2
-  echo "Check that apt uses the current Kali rolling repository." >&2
+  echo "Check the configured Kali repository and the available Node.js version." >&2
   exit 1
 fi
 
-echo "Installed basic packages."
 python3 --version
 git --version
 java -version
 node --version
 npm --version
 jq --version
+echo "Installed basic packages."
