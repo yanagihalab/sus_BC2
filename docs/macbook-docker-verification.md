@@ -26,6 +26,9 @@ docker info
 
 このスクリプトは、MacBook 用の入口スクリプトである。
 Kali Linux ベースの Docker image `sus-bc2-kali-env` を作成し、README、`setup/normal/`、`setup/macbook/` の基本的な整合性を確認する。
+image 内のパッケージ導入には、共通の `setup/normal/00-install-kali-packages.sh` を使用する。
+Docker Engine と SSH サーバーは image 内に不要なため、`SETUP_DOCKER=no SETUP_SSH=no` を指定して実行する。
+Docker の build context には、この共通スクリプトだけをコピーした一時ディレクトリを使い、終了時に削除する。
 
 image 名を変えたい場合は、`IMAGE_NAME` を指定する。
 
@@ -96,7 +99,12 @@ docker run --rm --platform linux/amd64 \
   -v "$PWD:/work" \
   -w /work \
   kalilinux/kali-rolling \
-  bash -lc 'WORKDIR=/tmp ./setup/macbook/04-install-injectived.sh && ./setup/macbook/05-create-test-wallet.sh'
+  bash -lc '
+    set -euo pipefail
+    SETUP_DOCKER=no SETUP_SSH=no bash ./setup/normal/00-install-kali-packages.sh
+    WORKDIR=/tmp ./setup/macbook/04-install-injectived.sh
+    ./setup/macbook/05-create-test-wallet.sh
+  '
 ```
 
 このコマンドで表示される mnemonic は検証用の一時 wallet の秘密情報である。
@@ -106,6 +114,8 @@ docker run --rm --platform linux/amd64 \
 
 `setup/macbook/10-build-cw20-sample.sh` は、`setup/normal/10-build-cw20-sample.sh` 経由でさらに `docker run` を実行する。
 通常のコンテナでは内側の Docker から作業ディレクトリを参照できないため、ホスト Docker socket と、ホストにも存在する絶対パスを使う必要がある。
+現在のビルドでは `cw-plus` のワークスペース全体を保持し、`./contracts/cw20-base` を optimizer の引数に指定する。ソースコード、`Cargo.toml`、`Cargo.lock`、依存パッケージを残し、生成済みの `artifacts/*.wasm` と `artifacts/checksums.txt` を削除してから `cw20-base` の WASM を生成する。
+コマンド全文と各指定の役割は、[メイン README の一括セットアップの補足](../README.md) に記載している。
 
 ```bash
 mkdir -p /private/tmp/sus_BC2-cwplus-verify
@@ -116,10 +126,17 @@ docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -w "$PWD" \
   kalilinux/kali-rolling \
-  bash -lc 'apt update && apt install -y git docker-cli && WORKDIR=/private/tmp/sus_BC2-cwplus-verify ./setup/macbook/10-build-cw20-sample.sh'
+  bash -lc '
+    set -euo pipefail
+    SETUP_DOCKER=yes SETUP_SSH=no bash ./setup/normal/00-install-kali-packages.sh
+    WORKDIR=/private/tmp/sus_BC2-cwplus-verify ./setup/macbook/10-build-cw20-sample.sh
+  '
 ```
 
-成功すると、`artifacts/cw20_base.wasm` が表示される。
+この例では、Docker CLI も共通の `00-install-kali-packages.sh` で導入し、ホストの Docker Engine に接続してビルドする。
+成功すると、空でない `artifacts/cw20_base.wasm` と `artifacts/checksums.txt` が確認される。
+中間ビルド成果物は `cw20_base_cache` を `/target` に、取得した Rust パッケージは `registry_cache` を `/usr/local/cargo/registry` にマウントして保持する。
+初回は依存クレートとワークスペース内の依存パッケージのコンパイルが必要である。
 Apple Silicon では `cosmwasm/workspace-optimizer:0.17.0` が amd64 イメージとして動くため、エミュレーションにより時間がかかる場合がある。
 
 ## 9. 環境変数を表示するスクリプト

@@ -1,6 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SETUP_DOCKER="${SETUP_DOCKER:-yes}"
+SETUP_SSH="${SETUP_SSH:-no}"
+for flag in SETUP_DOCKER SETUP_SSH; do
+  case "${!flag}" in
+    yes|no) ;;
+    *)
+      echo "$flag must be yes or no." >&2
+      exit 1
+      ;;
+  esac
+done
+
+PACKAGES=(
+  python3-pip python3-venv openjdk-11-jdk
+  unzip npm jq git curl nodejs
+  bash ca-certificates openssh-client wget
+)
+if [ "$SETUP_DOCKER" = "yes" ]; then
+  PACKAGES+=(docker.io)
+fi
+if [ "$SETUP_SSH" = "yes" ]; then
+  PACKAGES+=(openssh-server)
+fi
+
 if command -v sudo >/dev/null 2>&1; then
   SUDO="sudo"
 elif [ "$(id -u)" -eq 0 ]; then
@@ -34,15 +58,7 @@ run_apt "Upgrading installed packages" \
   $SUDO apt-get -o Acquire::Retries=5 --with-new-pkgs upgrade -y
 run_apt "Installing development dependencies" \
   $SUDO apt-get -o Acquire::Retries=5 install -y \
-  python3-pip \
-  python3-venv \
-  openjdk-11-jdk \
-  unzip \
-  npm \
-  jq \
-  git \
-  curl \
-  nodejs
+  "${PACKAGES[@]}"
 
 NODE_VERSION="$(node --version)"
 NODE_MAJOR="${NODE_VERSION#v}"

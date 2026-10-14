@@ -67,14 +67,14 @@ cd ~/temp/sus_BC2
 | 順序 | 処理 | 内容 |
 | --- | --- | --- |
 | 1 | 設定・実行条件の確認 | 各 `SETUP_*` の値、リポジトリ、`requirements.txt`、Visualizer の `package.json` を確認する。Injective を導入する場合は x86_64 が必要で、CW20 をビルドする場合は Docker の導入も有効にする。作業先と各パスを設定し、WSL 上での実行かを確認する。WSL ではない場合は警告を表示する。 |
-| 2 | Kali の更新と基本ツールの導入 | `00-install-kali-packages.sh` で、APT のパッケージ一覧更新、インストール済みパッケージの更新、基本ツールの導入を順に行う。Python 用ツール、Java 11、Node.js、npm、Git、curl、unzip、jq を導入し、Node.js が 20 以上であることと各ツールのバージョンを確認する。この段階の APT 処理にはダウンロードの再試行設定が入っている。 |
+| 2 | Kali の更新とパッケージの導入 | `00-install-kali-packages.sh` で、APT のパッケージ一覧更新、インストール済みパッケージの更新、必要なパッケージの導入を各1回実行する。基本ツールに加え、`SETUP_DOCKER=yes` では `docker.io`、`SETUP_SSH=yes` では `openssh-server` を同じ install 処理で導入する。Node.js が 20 以上であることと各ツールのバージョンを確認する。APT のダウンロード再試行と失敗診断も、この段階に集約する。 |
 | 3 | Python 仮想環境の作成 | リポジトリ直下に `venv/` を作成し、その環境に `requirements.txt` の `requests`、`numpy`、`scipy`、`tqdm`、`pandas`、`matplotlib` を導入する。作成先は `VENV_DIR` で変更できる。 |
 | 4 | Visualizer の依存パッケージの導入 | `08-setup-proposer-visualizer.sh` で、`Day1/Proposer-visualizer` 内の `npm install` を実行する。Visualizer の起動は別途行う。 |
-| 5 | SSH サーバーの設定（任意） | `SETUP_SSH=yes` の場合だけ、`02-setup-vscode-ssh.sh` を実行する。OpenSSH を導入し、標準ポートを `2222` に設定する。パスワード認証を有効、root ログインを無効にし、SSH サービスを再起動する。 |
-| 6 | SimBlock の取得とビルド | `03-install-simblock.sh` で依存パッケージを導入し、SimBlock のリポジトリがなければ取得する。Java 11 の JDK を選択し、Gradle の `clean` と `build` を実行する。シミュレーションの実行は別途行う。 |
+| 5 | SSH サーバーの設定（任意） | `SETUP_SSH=yes` の場合だけ、`02-setup-vscode-ssh.sh` を実行する。処理順序の 2 で導入した OpenSSH の標準ポートを `2222` に設定する。パスワード認証を有効、root ログインを無効にし、SSH サービスを再起動する。 |
+| 6 | SimBlock の取得とビルド | `03-install-simblock.sh` で、導入済みのツールを確認し、SimBlock のリポジトリがなければ取得する。Java 11 の JDK を選択し、Gradle の `clean` と `build` を実行する。シミュレーションの実行は別途行う。 |
 | 7 | injectived の導入 | `04-install-injectived.sh` で Linux amd64 向けの配布ファイルを取得・展開し、`injectived` を `/usr/local/bin/` に配置する。共有ライブラリが同梱されている場合は `/usr/lib/` に配置し、最後にバージョンを確認する。 |
-| 8 | Docker Engine の導入と起動 | `09-install-docker.sh` で `docker.io` を導入し、Docker サービスを起動してバージョンを確認する。標準設定では Docker グループへのユーザー追加を省略し、`hello-world` も実行しない。 |
-| 9 | CW20 サンプルの WASM ビルド | `10-build-cw20-sample.sh` で Docker への接続を確認し、必要に応じて `sudo docker` を使う。`cw-plus` のリポジトリがなければ取得し、`cosmwasm/workspace-optimizer:0.17.0` でビルドする。生成された `cw-plus/artifacts/cw20_base.wasm` を確認する。 |
+| 8 | Docker Engine の起動と確認 | `09-install-docker.sh` で、処理順序の 2 で導入した Docker のサービスを起動してバージョンを確認する。標準設定では Docker グループへのユーザー追加を省略し、`hello-world` も実行しない。 |
+| 9 | CW20 サンプルの WASM ビルド | `10-build-cw20-sample.sh` で Docker への接続を確認し、必要に応じて `sudo docker` を使う。`cw-plus` のリポジトリがなければ `--depth 1` で取得し、`cosmwasm/workspace-optimizer:0.17.0` に `./contracts/cw20-base` を指定してビルドする。古い WASM とチェックサムを削除してから、生成された `cw-plus/artifacts/cw20_base.wasm` が空でないこととチェックサムを確認する。 |
 | 10 | 完了メッセージと操作方法の表示 | リポジトリ、仮想環境、外部リポジトリ・ダウンロードの保存先を表示し、仮想環境を有効にするコマンドや、SSH 設定・各機能の省略方法を案内する。標準の外部リポジトリ・ダウンロード先はリポジトリの親ディレクトリ（本書の配置では `~/temp`）である。 |
 
 Visualizer、SimBlock、Injective、Docker、CW20 は、対応する `SETUP_*` に `no` を指定すると省略できる。Docker を省略する場合は `SETUP_DOCKER=no SETUP_CW20=no` を指定する。
@@ -100,6 +100,7 @@ WSL 本体の更新と Kali Linux のインストールは、スクリプト実�
 標準セットアップは x86_64 版 Kali Linux を対象とする。`injectived` には Linux amd64 向けの配布バイナリを使用する。
 本書で紹介する環境構築スクリプトのコマンドは、特に指定がない限り、リポジトリルートから実行する。
 環境構築は、このスクリプトの実行に集約している。標準の設定で、次の処理を順に行う。
+APT による更新とパッケージ導入は `00-install-kali-packages.sh` にまとめている。`02`、`03`、`04`、`09` の個別スクリプトは、導入済みのパッケージを使って設定・取得・ビルド・起動を行う。
 以下の補足では、スクリプト内で実行するコマンドとその役割を示す。通常の準備には主手順 3 を使い、補足は各処理を理解するために参照する。
 コマンド例は、リポジトリを `~/temp/sus_BC2` に配置した場合の標準パスで記載している。`WORKDIR`、`VENV_DIR`、`APP_DIR` などを変更した場合は、指定したパスに読み替える。
 一括セットアップは `set -euo pipefail` により、主要な処理の失敗や未設定変数の参照を検出して停止する。以下のコードブロックは、処理ごとの説明である。
@@ -107,12 +108,12 @@ WSL 本体の更新と Kali Linux のインストールは、スクリプト実�
 | 対象 | セットアップ内容 |
 | --- | --- |
 | Kali Linux | パッケージ情報・インストール済みパッケージの更新 |
-| 基本ツール | Python、Java 11、Node.js、npm、Git、curl、unzip、jq などの導入 |
+| 基本ツール | Python、Java 11、Node.js、npm、Git、curl、unzip、jq、Bash、CA 証明書、SSH クライアント、wget の導入 |
 | Python | `venv` という名前の仮想環境の作成と `requirements.txt` のライブラリの導入 |
 | Proposer Visualizer | Node.js 20 以降の確認と npm 依存パッケージの導入 |
 | SimBlock | ソースコードの取得と Java 11 によるビルド |
 | injectived | CLI と共有ライブラリの導入 |
-| Docker / CW20 | Docker の導入・起動、CW20 サンプルの取得と WASM のビルド |
+| Docker / CW20 | `00` で Docker を導入し、`09` で起動。CW20 サンプルの取得と `cw20-base` の WASM ビルド |
 
 完了後は、後述の各項目に従って仮想環境の有効化、アプリの起動、実験を行う。
 
@@ -138,21 +139,44 @@ sudo apt-get -o Acquire::Retries=5 --with-new-pkgs upgrade -y
 
 #### 基本ツールのインストール
 
-基本ツールは、次のコマンドでインストールする。
+基本ツールと、指定した機能に必要なパッケージを配列にまとめ、1回の install 処理で導入する。
+`SETUP_DOCKER` の既定値は `yes`、`SETUP_SSH` の既定値は `no` である。一括セットアップの入口は、この2つの指定を `00-install-kali-packages.sh` に渡す。
+`00-install-kali-packages.sh` は、両方の値が `yes` または `no` であることを確認し、それ以外の場合は APT の実行前に停止する。
 
 ```bash
-sudo apt-get -o Acquire::Retries=5 install -y \
-  python3-pip python3-venv openjdk-11-jdk \
+SETUP_DOCKER="${SETUP_DOCKER:-yes}"
+SETUP_SSH="${SETUP_SSH:-no}"
+PACKAGES=(
+  python3-pip python3-venv openjdk-11-jdk
   unzip npm jq git curl nodejs
+  bash ca-certificates openssh-client wget
+)
+if [ "$SETUP_DOCKER" = "yes" ]; then
+  PACKAGES+=(docker.io)
+fi
+if [ "$SETUP_SSH" = "yes" ]; then
+  PACKAGES+=(openssh-server)
+fi
+sudo apt-get -o Acquire::Retries=5 install -y "${PACKAGES[@]}"
 ```
+
+配列の順序は基本ツール、Docker、SSH サーバーの順である。`"${PACKAGES[@]}"` は、配列の各要素を別々の引数として渡す。
+`00-install-kali-packages.sh` は update、upgrade、install を各1回呼び出す。`Acquire::Retries=5` は各コマンド内のダウンロード再試行であり、APT の全処理を繰り返すものではない。
 
 | パッケージ | 用途 |
 | --- | --- |
 | `python3-pip` / `python3-venv` | Python ライブラリの管理と仮想環境の作成 |
 | `openjdk-11-jdk` | SimBlock のビルドと実行 |
 | `nodejs` / `npm` | Visualizer の依存パッケージの導入と起動 |
-| `git` / `curl` / `unzip` | ソースコード・配布ファイルの取得と展開 |
+| `git` / `curl` / `wget` / `unzip` | ソースコード・配布ファイルの取得と展開 |
 | `jq` | JSON の表示・確認 |
+| `bash` | セットアップスクリプトの実行 |
+| `ca-certificates` | HTTPS 通信に使う CA 証明書 |
+| `openssh-client` | SSH クライアント |
+| `docker.io` | Docker Engine。`SETUP_DOCKER=yes` の場合に導入 |
+| `openssh-server` | SSH サーバー。`SETUP_SSH=yes` の場合に導入 |
+
+各スクリプトを個別に実行する場合も、先に `./setup/normal/00-install-kali-packages.sh` を実行して必要なパッケージを導入する。SSH サーバーの個別設定には、後述の `SETUP_SSH=yes` を使う準備が必要である。
 
 スクリプトは Node.js のメジャーバージョンを確認し、20 未満の場合は停止する。
 導入後、次のコマンドで各ツールのバージョンを確認する。
@@ -221,11 +245,9 @@ rm -rf node_modules package-lock.json
 
 #### SimBlock の取得とビルド
 
-Java 11 と取得に必要なツールを確認し、SimBlock のリポジトリがない場合にクローンする。
+`00-install-kali-packages.sh` で導入した Java 11 と取得に必要なツールを確認し、SimBlock のリポジトリがない場合にクローンする。
 
 ```bash
-sudo apt update
-sudo apt install -y openjdk-11-jdk unzip git
 mkdir -p ~/temp
 if [ ! -d ~/temp/simblock/.git ]; then
   git clone https://github.com/dsg-titech/simblock ~/temp/simblock
@@ -275,11 +297,9 @@ SimBlock のシミュレーション実行は、後述の `./gradlew :simulator:
 
 #### injectived の導入
 
-Linux amd64 向けの配布ファイルを取得し、CLI と共有ライブラリを配置する。
+`00-install-kali-packages.sh` で導入した `wget` と `unzip` を使い、Linux amd64 向けの配布ファイルを取得し、CLI と共有ライブラリを配置する。
 
 ```bash
-sudo apt update
-sudo apt install -y wget unzip
 mkdir -p ~/temp
 cd ~/temp
 wget -O linux-amd64.zip https://github.com/InjectiveFoundation/injective-core/releases/latest/download/linux-amd64.zip
@@ -297,13 +317,11 @@ injectived version
 `/usr/local/bin/` は CLI の配置先である。共有ライブラリが同梱されている場合は `/usr/lib/` に配置し、`ldconfig` でライブラリの検索情報を更新する。
 最後に `injectived version` で起動できることを確認する。
 
-#### Docker の導入と起動
+#### Docker の起動と確認
 
-Docker Engine をインストールし、サービスを起動する。
+Docker Engine のパッケージ導入は `00-install-kali-packages.sh` で完了している。ここではサービスを起動する。
 
 ```bash
-sudo apt update
-sudo apt install -y docker.io
 if command -v systemctl >/dev/null 2>&1; then
   sudo systemctl enable docker || true
   sudo systemctl start docker || sudo service docker start
@@ -327,8 +345,12 @@ CW20 のビルドでは、通常の Docker アクセスが使えない場合に 
 #### CW20 サンプルの取得と WASM のビルド
 
 ビルド用の Docker を通常の権限で使えるか確認し、必要に応じて `sudo` で実行する。
+`cw-plus` のワークスペース全体を `/code` に配置し、ビルド対象には `./contracts/cw20-base` を指定する。
+ソースコード、`Cargo.toml`、`Cargo.lock`、依存パッケージは保持し、生成済みの `artifacts/*.wasm` と `artifacts/checksums.txt` を削除してからビルドする。
 
 ```bash
+WORKDIR="${WORKDIR:-$HOME/temp}"
+CW_PLUS_DIR="${CW_PLUS_DIR:-$WORKDIR/cw-plus}"
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker がインストールされていません" >&2
   exit 1
@@ -343,25 +365,47 @@ if ! docker info >/dev/null 2>&1; then
   fi
 fi
 
-mkdir -p ~/temp
-if [ ! -d ~/temp/cw-plus/.git ]; then
-  git clone https://github.com/CosmWasm/cw-plus.git ~/temp/cw-plus
+mkdir -p "$WORKDIR"
+if [ ! -d "$CW_PLUS_DIR/.git" ]; then
+  git clone --depth 1 https://github.com/CosmWasm/cw-plus.git "$CW_PLUS_DIR"
 fi
-cd ~/temp/cw-plus
-ls contracts/cw20-base
+cd "$CW_PLUS_DIR"
+if [ ! -f contracts/cw20-base/Cargo.toml ]; then
+  echo "CW20 sample was not found: $CW_PLUS_DIR/contracts/cw20-base/Cargo.toml" >&2
+  exit 1
+fi
+
+echo "Building only cw20-base; removing old WASM artifacts and checksums."
 "${DOCKER[@]}" run --rm \
+  --entrypoint /bin/sh \
   -v "$(pwd)":/code \
-  --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
+  --mount type=volume,source=cw20_base_cache,target=/target \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-  cosmwasm/workspace-optimizer:0.17.0
-ls -lh artifacts/
+  cosmwasm/workspace-optimizer:0.17.0 \
+  -c '
+    set -eu
+    rm -f artifacts/*.wasm artifacts/checksums.txt
+    exec /usr/local/bin/optimize.sh ./contracts/cw20-base
+  '
+
+if [ ! -s artifacts/cw20_base.wasm ]; then
+  echo "CW20 build did not produce a non-empty WASM file: $CW_PLUS_DIR/artifacts/cw20_base.wasm" >&2
+  exit 1
+fi
+
 ls -lh artifacts/cw20_base.wasm
+ls -lh artifacts/checksums.txt
 ```
 
 `docker info` は Docker Engine への接続確認である。
-`docker run --rm` はビルド用コンテナを起動し、終了時にコンテナを削除する。
-`-v` は `cw-plus` のルートをコンテナ内の `/code` に対応させ、2つの `--mount` は中間ビルド成果物（`target/`）と取得した Rust パッケージのキャッシュを保持する。
-optimizer はワークスペース全体をビルドし、`artifacts/cw20_base.wasm` などを生成する。`ls -lh` は生成ファイルとサイズの確認に使う。
+`git clone --depth 1` は、新規取得時の履歴を最新の1コミットに絞る。取得済みのリポジトリは再クローンしない。
+`docker run --rm` はビルド用コンテナを起動し、終了時にコンテナを削除する。`--entrypoint /bin/sh` と `-c` で、生成物の削除とビルドを1回の Docker 実行にまとめる。
+`-v` は `cw-plus` のルート全体を `/code` に対応させる。`cw20_base_cache` は中間ビルド成果物を `/target` に保持し、`registry_cache` は取得した Rust パッケージを `/usr/local/cargo/registry` に保持する。
+`rm -f` の削除対象は生成済みの WASM とチェックサムであり、ソースコードや Cargo の設定・ロックファイル、依存パッケージは削除しない。`Cargo.lock` は依存関係の解決に使うため保持する。
+`set -eu` は削除処理などが失敗した場合に停止する指定で、`exec` は同じシェルを optimizer に置き換え、その終了コードを返す。
+[公式の optimize.sh v0.17.0](https://github.com/CosmWasm/rust-optimizer/blob/v0.17.0/optimize.sh) は、ビルド対象のディレクトリを1引数で受け取る。ここでは `./contracts/cw20-base` を指定し、ほかのコントラクトの WASM 生成を省く。
+`-s` は生成された WASM が存在し、空でないことを確認する。`ls -lh` は `cw20_base.wasm` と `checksums.txt` の存在・サイズを確認するために使う。
+初回は `cw20-base` が使う依存クレートやワークスペース内の依存パッケージの取得・コンパイルが必要である。
 
 #### VS Code を SSH で接続する場合
 
@@ -372,11 +416,16 @@ cd ~/temp/sus_BC2
 SETUP_SSH=yes ./setup/normal/wsl-kali-experiment-env.sh
 ```
 
-この指定で実行される SSH サーバーの導入と設定は次のとおりである。
+この指定により、`00-install-kali-packages.sh` で `openssh-server` を導入し、その後 `02-setup-vscode-ssh.sh` で設定する。
+SSH の設定スクリプトを個別に実行する場合は、先に次のコマンドでパッケージを準備する。
 
 ```bash
-sudo apt update
-sudo apt install -y openssh-server
+SETUP_SSH=yes ./setup/normal/00-install-kali-packages.sh
+```
+
+導入済みの SSH サーバーに対して行う設定は次のとおりである。
+
+```bash
 PORT="${PORT:-2222}"
 SSHD_CONFIG="/etc/ssh/sshd_config"
 sudo cp "$SSHD_CONFIG" "${SSHD_CONFIG}.bak.$(date +%Y%m%d%H%M%S)"

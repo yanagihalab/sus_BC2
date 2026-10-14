@@ -4,17 +4,12 @@ set -euo pipefail
 WORKDIR="${WORKDIR:-$HOME/temp}"
 SIMBLOCK_DIR="${SIMBLOCK_DIR:-$WORKDIR/simblock}"
 
-if command -v sudo >/dev/null 2>&1; then
-  SUDO="sudo"
-elif [ "$(id -u)" -eq 0 ]; then
-  SUDO=""
-else
-  echo "sudo command is required when not running as root." >&2
-  exit 1
-fi
-
-$SUDO apt update
-$SUDO apt install -y openjdk-11-jdk unzip git
+for dependency in git unzip; do
+  if ! command -v "$dependency" >/dev/null 2>&1; then
+    echo "$dependency is required. Run setup/normal/00-install-kali-packages.sh first." >&2
+    exit 1
+  fi
+done
 
 mkdir -p "$WORKDIR"
 
@@ -43,7 +38,7 @@ if ! is_java11_jdk "${JAVA_HOME:-}"; then
 fi
 
 if [ -z "$JAVA_HOME" ]; then
-  echo "A Java 11 JDK was not found. Check openjdk-11-jdk under /usr/lib/jvm." >&2
+  echo "A Java 11 JDK was not found. Run setup/normal/00-install-kali-packages.sh first and check openjdk-11-jdk under /usr/lib/jvm." >&2
   exit 1
 fi
 

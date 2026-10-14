@@ -3,6 +3,13 @@ set -euo pipefail
 
 WORKDIR="${WORKDIR:-$HOME/temp}"
 
+for dependency in wget unzip; do
+  if ! command -v "$dependency" >/dev/null 2>&1; then
+    echo "$dependency is required. Run setup/normal/00-install-kali-packages.sh first." >&2
+    exit 1
+  fi
+done
+
 if command -v sudo >/dev/null 2>&1; then
   SUDO="sudo"
 elif [ "$(id -u)" -eq 0 ]; then
@@ -11,9 +18,6 @@ else
   echo "sudo command is required when not running as root." >&2
   exit 1
 fi
-
-$SUDO apt update
-$SUDO apt install -y wget unzip
 
 mkdir -p "$WORKDIR"
 cd "$WORKDIR"

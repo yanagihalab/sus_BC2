@@ -72,7 +72,9 @@ run_setup() {
   "$@"
 }
 
-run_setup "Installing basic packages and Node.js" "$SCRIPT_DIR/00-install-kali-packages.sh"
+run_setup "Installing Kali packages" \
+  env SETUP_DOCKER="$SETUP_DOCKER" SETUP_SSH="$SETUP_SSH" \
+  "$SCRIPT_DIR/00-install-kali-packages.sh"
 
 cd "$TARGET_REPO"
 printf '\n==> Creating the Python virtual environment\n'
@@ -98,7 +100,7 @@ if [ "$SETUP_INJECTIVE" = "yes" ]; then
 fi
 
 if [ "$SETUP_DOCKER" = "yes" ]; then
-  run_setup "Installing and starting Docker Engine" \
+  run_setup "Starting Docker Engine" \
     env RUN_HELLO_WORLD=no "$SCRIPT_DIR/09-install-docker.sh"
 fi
 

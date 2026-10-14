@@ -3,6 +3,11 @@ set -euo pipefail
 
 PORT="${PORT:-2222}"
 
+if ! command -v sshd >/dev/null 2>&1 && [ ! -x /usr/sbin/sshd ]; then
+  echo "OpenSSH server is required. Run SETUP_SSH=yes setup/normal/00-install-kali-packages.sh first." >&2
+  exit 1
+fi
+
 if command -v sudo >/dev/null 2>&1; then
   SUDO="sudo"
 elif [ "$(id -u)" -eq 0 ]; then
@@ -11,9 +16,6 @@ else
   echo "sudo command is required when not running as root." >&2
   exit 1
 fi
-
-$SUDO apt update
-$SUDO apt install -y openssh-server
 
 SSHD_CONFIG="/etc/ssh/sshd_config"
 $SUDO cp "$SSHD_CONFIG" "${SSHD_CONFIG}.bak.$(date +%Y%m%d%H%M%S)"

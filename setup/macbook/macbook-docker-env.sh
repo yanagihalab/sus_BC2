@@ -14,27 +14,18 @@ fi
 
 docker info >/dev/null
 
-docker build -t "$IMAGE_NAME" -f - /tmp <<'DOCKERFILE'
+BUILD_CONTEXT="$(mktemp -d)"
+trap 'rm -rf "$BUILD_CONTEXT"' EXIT
+cp "$SCRIPT_DIR/../normal/00-install-kali-packages.sh" "$BUILD_CONTEXT/00-install-kali-packages.sh"
+
+docker build -t "$IMAGE_NAME" -f - "$BUILD_CONTEXT" <<'DOCKERFILE'
 FROM kalilinux/kali-rolling
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt update \
-  && apt install -y \
-    bash \
-    ca-certificates \
-    curl \
-    git \
-    jq \
-    nodejs \
-    npm \
-    openjdk-11-jdk \
-    openssh-client \
-    python3-pip \
-    python3-venv \
-    unzip \
-    wget \
-  && apt clean \
+COPY 00-install-kali-packages.sh /tmp/00-install-kali-packages.sh
+RUN SETUP_DOCKER=no SETUP_SSH=no bash /tmp/00-install-kali-packages.sh \
+  && rm -f /tmp/00-install-kali-packages.sh \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work
@@ -87,7 +78,11 @@ if [ "$RUN_AMD64_INJECTIVE_CHECK" = "yes" ]; then
     -v "$REPO_ROOT:/work" \
     -w /work \
     kalilinux/kali-rolling \
-    bash -lc 'WORKDIR=/tmp ./setup/macbook/04-install-injectived.sh'
+    bash -lc '
+      set -euo pipefail
+      SETUP_DOCKER=no SETUP_SSH=no bash ./setup/normal/00-install-kali-packages.sh
+      WORKDIR=/tmp ./setup/macbook/04-install-injectived.sh
+    '
 fi
 
 cat <<EOF

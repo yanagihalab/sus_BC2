@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Docker is required. Run SETUP_DOCKER=yes setup/normal/00-install-kali-packages.sh first." >&2
+  exit 1
+fi
+
 if command -v sudo >/dev/null 2>&1; then
   SUDO="sudo"
 elif [ "$(id -u)" -eq 0 ]; then
@@ -9,9 +14,6 @@ else
   echo "sudo command is required when not running as root." >&2
   exit 1
 fi
-
-$SUDO apt update
-$SUDO apt install -y docker.io
 
 if command -v systemctl >/dev/null 2>&1; then
   $SUDO systemctl enable docker || true

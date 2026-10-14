@@ -10,11 +10,14 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "setup" / "normal"
+BASE_PACKAGES = (
+    "python3-pip python3-venv openjdk-11-jdk unzip npm jq git curl nodejs "
+    "bash ca-certificates openssh-client wget"
+)
 APT_COMMANDS = [
     "apt-get --error-on=any -o Acquire::Retries=5 update",
     "apt-get -o Acquire::Retries=5 --with-new-pkgs upgrade -y",
-    "apt-get -o Acquire::Retries=5 install -y "
-    "python3-pip python3-venv openjdk-11-jdk unzip npm jq git curl nodejs",
+    f"apt-get -o Acquire::Retries=5 install -y {BASE_PACKAGES} docker.io",
 ]
 APT_STAGES = (
     "Updating APT package indexes",
@@ -66,7 +69,11 @@ if [ "$stage" = "${APT_FAIL_STAGE:-}" ]; then
   exit 100
 fi
 ''')
-        for command in ("apt", "git", "python3", "java", "npm", "jq"):
+        for command in (
+            "apt", "git", "python3", "java", "npm", "jq", "wget", "unzip",
+            "docker", "systemctl", "service", "cp", "sed", "tee", "sshd",
+            "ldconfig", "mv", "usermod",
+        ):
             self.executable(
                 self.bin / command,
                 f'''printf "%s\\n" "{command} $*" >> "$COMMAND_LOG"
@@ -77,6 +84,12 @@ case "$*" in
   --version|-version) printf '%s\\n' '{command} stub version' ;;
 esac''',
             )
+        self.executable(self.bin / "grep", 'printf "grep %s\\n" "$*" >> "$COMMAND_LOG"\nexit 0')
+        self.executable(self.bin / "date", 'printf "%s\\n" "20261014000000"')
+        self.executable(self.bin / "whoami", 'printf "%s\\n" "testuser"')
+        self.executable(self.bin / "cat", '''
+while IFS= read -r line; do printf '%s\\n' "$line"; done
+''')
         self.executable(self.bin / "node", '''
 printf 'node %s\\n' "$*" >> "$COMMAND_LOG"
 if [ "${VERSION_FAIL_COMMAND:-}" = "node $*" ]; then
@@ -125,6 +138,38 @@ printf "%s\\n" "$NODE_STUB_VERSION"
 
     def apt_commands(self):
         return [line for line in self.commands().splitlines() if line.startswith("apt-get ")]
+
+    def assert_no_apt(self):
+        self.assertNotRegex(self.commands(), r"(?m)^(?:sudo )?apt(?:-get)? ")
+
+    def test_package_selection_covers_all_docker_and_ssh_options(self):
+        for docker in ("yes", "no"):
+            for ssh in ("yes", "no"):
+                with self.subTest(docker=docker, ssh=ssh):
+                    self.env.update(SETUP_DOCKER=docker, SETUP_SSH=ssh)
+                    result = self.run_setup("00-install-kali-packages.sh")
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    packages = BASE_PACKAGES
+                    if docker == "yes":
+                        packages += " docker.io"
+                    if ssh == "yes":
+                        packages += " openssh-server"
+                    self.assertEqual(self.apt_commands(), APT_COMMANDS[:2] + [
+                        f"apt-get -o Acquire::Retries=5 install -y {packages}",
+                    ])
+
+    def test_invalid_package_option_stops_before_any_apt(self):
+        for flag in ("SETUP_DOCKER", "SETUP_SSH"):
+            with self.subTest(flag=flag):
+                self.env[flag] = "maybe"
+                try:
+                    result = self.run_setup("00-install-kali-packages.sh")
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(f"{flag} must be yes or no", result.stderr)
+                    self.assert_no_apt()
+                    self.assertNotIn("Installed basic packages.", result.stdout)
+                finally:
+                    self.env.pop(flag)
 
     def test_basic_packages_accept_node_20_and_newer(self):
         for version in ("v20.19.0", "v24.21.0"):
@@ -255,6 +300,8 @@ printf "%s\\n" "$NODE_STUB_VERSION"
         result = self.run_setup("03-install-simblock.sh")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f"gradlew build: {custom_java}", self.commands())
+        self.assert_no_apt()
+        self.assertNotIn("sudo ", self.commands())
 
     def test_simblock_falls_back_from_java17_or_missing_home(self):
         java17 = self.jdk("java17", "17.0.16")
@@ -265,13 +312,98 @@ printf "%s\\n" "$NODE_STUB_VERSION"
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn(f"gradlew clean: {self.java11}", self.commands())
                 self.assertIn(f"gradlew build: {self.java11}", self.commands())
+                self.assert_no_apt()
 
     def test_simblock_rejects_java11_runtime_without_compiler(self):
         (self.java11 / "bin" / "javac").unlink()
         result = self.run_setup("03-install-simblock.sh")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("A Java 11 JDK was not found", result.stderr)
+        self.assertIn("setup/normal/00-install-kali-packages.sh", result.stderr)
         self.assertNotIn("gradlew", self.commands())
+        self.assert_no_apt()
+
+    def test_simblock_build_needs_no_sudo_or_root_privileges(self):
+        (self.bin / "sudo").unlink()
+        self.env["ID_STUB_UID"] = "1000"
+        result = self.run_setup("03-install-simblock.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("gradlew build", self.commands())
+        self.assert_no_apt()
+        self.assertNotIn("id -u", self.commands())
+
+    def test_individual_setup_missing_commands_recommend_base_installer(self):
+        for filename, command in (
+            ("03-install-simblock.sh", "git"),
+            ("03-install-simblock.sh", "unzip"),
+            ("04-install-injectived.sh", "wget"),
+            ("04-install-injectived.sh", "unzip"),
+            ("09-install-docker.sh", "docker"),
+        ):
+            with self.subTest(filename=filename, command=command):
+                mock = self.bin / command
+                body = mock.read_bytes()
+                mock.unlink()
+                try:
+                    result = self.run_setup(filename)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("setup/normal/00-install-kali-packages.sh", result.stderr)
+                    self.assert_no_apt()
+                    self.assertNotIn("gradlew ", self.commands())
+                    self.assertNotIn("wget -O", self.commands())
+                    self.assertNotIn("systemctl ", self.commands())
+                finally:
+                    mock.write_bytes(body)
+                    mock.chmod(0o755)
+
+    def test_injectived_setup_has_no_apt_step(self):
+        self.executable(self.bin / "unzip", '''
+printf 'unzip %s\\n' "$*" >> "$COMMAND_LOG"
+printf '#!/bin/sh\\nexit 0\\n' > injectived
+''')
+        self.executable(self.bin / "injectived", 'printf "injectived %s\\n" "$*" >> "$COMMAND_LOG"')
+        result = self.run_setup("04-install-injectived.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("wget -O linux-amd64.zip", self.commands())
+        self.assertIn("sudo mv injectived /usr/local/bin/", self.commands())
+        self.assert_no_apt()
+
+    def test_legacy_injectived_wrapper_preserves_missing_dependency_failure(self):
+        (self.bin / "wget").unlink()
+        result = subprocess.run(
+            [str(self.bin / "bash"), str(ROOT / "scripts/injectived/install-injectived.sh")],
+            env=self.env, text=True, capture_output=True, timeout=15,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("wget is required", result.stderr)
+        self.assertIn("setup/normal/00-install-kali-packages.sh", result.stderr)
+        self.assert_no_apt()
+        self.assertNotIn("unzip ", self.commands())
+
+    def test_docker_setup_has_no_apt_step(self):
+        result = self.run_setup("09-install-docker.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("systemctl start docker", self.commands())
+        self.assertIn("docker --version", self.commands())
+        self.assert_no_apt()
+
+    def test_ssh_setup_has_no_apt_step_and_only_uses_mocked_config_commands(self):
+        result = self.run_setup("02-setup-vscode-ssh.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("cp /etc/ssh/sshd_config", self.commands())
+        self.assertIn("sed -i", self.commands())
+        self.assertIn("service ssh restart", self.commands())
+        self.assert_no_apt()
+
+    def test_ssh_missing_server_recommends_opt_in_base_install(self):
+        if os.access("/usr/sbin/sshd", os.X_OK):
+            self.skipTest("Host /usr/sbin/sshd exists; absolute fallback cannot be hidden by PATH mocks.")
+        (self.bin / "sshd").unlink()
+        result = self.run_setup("02-setup-vscode-ssh.sh")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("SETUP_SSH=yes setup/normal/00-install-kali-packages.sh", result.stderr)
+        self.assert_no_apt()
+        self.assertNotIn("cp /etc/ssh/sshd_config", self.commands())
 
 
 if __name__ == "__main__":
