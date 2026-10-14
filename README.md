@@ -56,6 +56,8 @@ cd ~/temp/sus_BC2
 ./setup/normal/wsl-kali-experiment-env.sh
 ```
 
+このスクリプトを実行すると、標準設定ではリポジトリルートに `venv` という名前の Python 仮想環境（`~/temp/sus_BC2/venv/`）が作成され、必要なライブラリがインストールされる。
+
 <details>
 <summary>補足：初期設定と一括セットアップの内容</summary>
 
@@ -64,12 +66,15 @@ cd ~/temp/sus_BC2
 標準セットアップは x86_64 版 Kali Linux を対象とする。`injectived` には Linux amd64 向けの配布バイナリを使用する。
 本書で紹介する環境構築スクリプトのコマンドは、特に指定がない限り、リポジトリルートから実行する。
 環境構築は、このスクリプトの実行に集約している。標準の設定で、次の処理を順に行う。
+以下の補足では、スクリプト内で実行するコマンドとその役割を示す。通常の準備には主手順 3 を使い、補足は各処理を理解するために参照する。
+コマンド例は、リポジトリを `~/temp/sus_BC2` に配置した場合の標準パスで記載している。`WORKDIR`、`VENV_DIR`、`APP_DIR` などを変更した場合は、指定したパスに読み替える。
+一括セットアップは `set -euo pipefail` により、コマンドの失敗や未設定変数の参照を検出して停止する。以下のコードブロックは、処理ごとの説明である。
 
 | 対象 | セットアップ内容 |
 | --- | --- |
 | Kali Linux | パッケージ情報・インストール済みパッケージの更新 |
 | 基本ツール | Python、Java 11、Node.js、npm、Git、curl、unzip、jq などの導入 |
-| Python | 仮想環境の作成と `requirements.txt` のライブラリの導入 |
+| Python | `venv` という名前の仮想環境の作成と `requirements.txt` のライブラリの導入 |
 | Proposer Visualizer | Node.js 20 以降の確認と npm 依存パッケージの導入 |
 | SimBlock | ソースコードの取得と Java 11 によるビルド |
 | injectived | CLI と共有ライブラリの導入 |
@@ -85,12 +90,36 @@ cd ~/temp/sus_BC2
 
 #### Kali Linux の更新
 
-パッケージ情報の更新と、インストール済みパッケージのアップグレードは、一括セットアップ内で行う。
+一括セットアップでは、次のコマンドを実行する。
+
+```bash
+sudo apt update
+sudo apt upgrade -y
+```
+
+`apt update` は、利用可能なパッケージとバージョンの一覧を更新する。
+`apt upgrade -y` は、その一覧を使ってインストール済みパッケージを更新する。`-y` は確認への応答を自動化する指定である。
 
 #### 基本ツールのインストール
 
-Node.js と npm を含む基本ツールのインストールも、一括セットアップ内で行う。
-セットアップ完了後、各ツールのバージョンを確認できる。
+基本ツールは、次のコマンドでインストールする。
+
+```bash
+sudo apt install -y \
+  python3-pip python3-venv openjdk-11-jdk \
+  unzip npm jq git curl nodejs
+```
+
+| パッケージ | 用途 |
+| --- | --- |
+| `python3-pip` / `python3-venv` | Python ライブラリの管理と仮想環境の作成 |
+| `openjdk-11-jdk` | SimBlock のビルドと実行 |
+| `nodejs` / `npm` | Visualizer の依存パッケージの導入と起動 |
+| `git` / `curl` / `unzip` | ソースコード・配布ファイルの取得と展開 |
+| `jq` | JSON の表示・確認 |
+
+スクリプトは Node.js のメジャーバージョンを確認し、20 未満の場合は停止する。
+導入後、次のコマンドで各ツールのバージョンを確認する。
 
 ```bash
 python3 --version
@@ -101,6 +130,203 @@ npm --version
 jq --version
 ```
 
+#### Python 仮想環境（venv）の作成と利用
+
+`venv` は、実験で使う Python とライブラリをプロジェクトごとに管理するための仮想環境である。
+`wsl-kali-experiment-env.sh` を実行すると、標準設定でリポジトリ内の `venv/` にこの環境が自動作成される。[Python の venv ドキュメント](https://docs.python.org/ja/3/library/venv.html) も参照できる。
+
+```bash
+cd ~/temp/sus_BC2
+python3 -m venv venv
+venv/bin/python -m pip install -r requirements.txt
+```
+
+`python3 -m venv venv` は、Python に付属する `venv` モジュールを使い、最後の引数で指定した `venv/` ディレクトリに仮想環境を作成する。
+作成後は、`venv/bin/python` がこの環境の Python 実行ファイルとなる。
+
+`venv/bin/python -m pip install -r requirements.txt` は、仮想環境の Python で `pip` を実行し、`requirements.txt` に記載されたライブラリをその環境へインストールする。
+一括セットアップも、このように仮想環境の Python を直接指定してライブラリを導入する。
+
+実験を始めるときは、現在のターミナルで仮想環境を有効にする。
+
+```bash
+cd ~/temp/sus_BC2
+source venv/bin/activate
+python --version
+python -m pip list
+```
+
+`source venv/bin/activate` は、現在のシェルの `PATH` を変更し、`python` や `pip` が仮想環境内の実行ファイルを参照するようにする。
+スクリプトの子プロセス内の設定は、実行元のターミナルには引き継がれないため、一括セットアップ後にもこの有効化が必要である。
+`python -m pip list` は、仮想環境にインストールされたライブラリを確認するコマンドである。
+
+実験を終えて仮想環境の利用を解除するときは、次を実行する。作成した `venv/` は残るため、次回も `source` で有効化できる。
+
+```bash
+deactivate
+```
+
+#### Proposer Visualizer の依存パッケージの導入
+
+Node.js と npm を導入した後、アプリのディレクトリで次を実行する。
+
+```bash
+cd ~/temp/sus_BC2/Day1/Proposer-visualizer
+npm install
+```
+
+`npm install` は、`package.json` とロックファイルに基づいて必要なパッケージを `node_modules/` に導入する。
+一括セットアップは依存パッケージの準備までを行い、アプリの起動は後述の `npm run start` で行う。
+`RESET_NODE_MODULES=yes` を指定した場合だけ、インストール前に次の削除処理を行い、依存パッケージとロックファイルを作り直す。
+
+```bash
+rm -rf node_modules package-lock.json
+```
+
+#### SimBlock の取得とビルド
+
+Java 11 と取得に必要なツールを確認し、SimBlock のリポジトリがない場合にクローンする。
+
+```bash
+sudo apt update
+sudo apt install -y openjdk-11-jdk unzip git
+mkdir -p ~/temp
+if [ ! -d ~/temp/simblock/.git ]; then
+  git clone https://github.com/dsg-titech/simblock ~/temp/simblock
+fi
+```
+
+`.git` の存在確認は、取得済みのソースコードを再度クローンしないための処理である。
+次に、Java 11 の JDK を選ぶ。既存の `JAVA_HOME` が Java 11 の JDK を指している場合はその値を使い、それ以外はインストール先から選び直す。
+`java` と `javac` の存在、および Java のバージョンを確認する処理は次のとおりである。
+
+```bash
+is_java11_jdk() {
+  local jdk_dir="$1"
+  local version
+  [ -n "$jdk_dir" ] && [ -x "$jdk_dir/bin/java" ] && [ -x "$jdk_dir/bin/javac" ] || return 1
+  version="$("$jdk_dir/bin/java" -version 2>&1)" || return 1
+  [[ "$version" == *'version "11.'* || "$version" == *'version "11"'* ]]
+}
+
+if ! is_java11_jdk "${JAVA_HOME:-}"; then
+  JAVA_HOME=""
+  while IFS= read -r candidate; do
+    if is_java11_jdk "$candidate"; then
+      JAVA_HOME="$candidate"
+      break
+    fi
+  done < <(find /usr/lib/jvm -maxdepth 1 -type d -name 'java-11-openjdk-*' | sort)
+fi
+
+if [ -z "$JAVA_HOME" ]; then
+  echo "Java 11 JDK が見つかりません" >&2
+  exit 1
+fi
+
+export JAVA_HOME
+export PATH="$JAVA_HOME/bin:$PATH"
+cd ~/temp/simblock
+chmod +x gradlew
+./gradlew clean
+./gradlew build
+```
+
+`JAVA_HOME` は使用する JDK の場所を指定し、`PATH` の先頭へその `bin/` を追加することで Java 11 を選択する。
+`chmod +x gradlew` は Gradle Wrapper に実行権限を付ける。
+`clean` は前回のビルド出力を削除し、`build` はソースコードをビルドする。
+SimBlock のシミュレーション実行は、後述の `./gradlew :simulator:run` で行う。
+
+#### injectived の導入
+
+Linux amd64 向けの配布ファイルを取得し、CLI と共有ライブラリを配置する。
+
+```bash
+sudo apt update
+sudo apt install -y wget unzip
+mkdir -p ~/temp
+cd ~/temp
+wget -O linux-amd64.zip https://github.com/InjectiveFoundation/injective-core/releases/latest/download/linux-amd64.zip
+unzip -o linux-amd64.zip
+chmod +x injectived
+sudo mv injectived /usr/local/bin/
+if [ -f libwasmvm.x86_64.so ]; then
+  sudo mv libwasmvm.x86_64.so /usr/lib/
+  sudo ldconfig
+fi
+injectived version
+```
+
+`wget -O` は保存するファイル名を指定してダウンロードし、`unzip -o` は既存ファイルを上書きして展開する。
+`/usr/local/bin/` は CLI の配置先である。共有ライブラリが同梱されている場合は `/usr/lib/` に配置し、`ldconfig` でライブラリの検索情報を更新する。
+最後に `injectived version` で起動できることを確認する。
+
+#### Docker の導入と起動
+
+Docker Engine をインストールし、サービスを起動する。
+
+```bash
+sudo apt update
+sudo apt install -y docker.io
+if command -v systemctl >/dev/null 2>&1; then
+  sudo systemctl enable docker || true
+  sudo systemctl start docker || sudo service docker start
+else
+  sudo service docker start
+fi
+sudo docker --version
+```
+
+`systemctl enable` はサービスの自動起動を設定し、`systemctl start` は現在のサービスを起動する。
+`systemctl` が使えない場合や起動に失敗した場合は、`service docker start` で起動する。
+`ADD_USER_TO_DOCKER_GROUP=yes` を指定した場合だけ、次のコマンドで現在のユーザーを Docker グループへ追加する。
+
+```bash
+sudo usermod -aG docker "$USER"
+```
+
+グループ変更は、新しいシェルを開くか `newgrp docker` を実行して反映する。
+CW20 のビルドでは、通常の Docker アクセスが使えない場合に `sudo docker` を選ぶため、標準セットアップの途中でグループ変更を反映する操作は不要である。
+
+#### CW20 サンプルの取得と WASM のビルド
+
+ビルド用の Docker を通常の権限で使えるか確認し、必要に応じて `sudo` で実行する。
+
+```bash
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Docker がインストールされていません" >&2
+  exit 1
+fi
+DOCKER=(docker)
+if ! docker info >/dev/null 2>&1; then
+  if command -v sudo >/dev/null 2>&1 && sudo docker info >/dev/null 2>&1; then
+    DOCKER=(sudo docker)
+  else
+    echo "Docker Engine に接続できません" >&2
+    exit 1
+  fi
+fi
+
+mkdir -p ~/temp
+if [ ! -d ~/temp/cw-plus/.git ]; then
+  git clone https://github.com/CosmWasm/cw-plus.git ~/temp/cw-plus
+fi
+cd ~/temp/cw-plus
+ls contracts/cw20-base
+"${DOCKER[@]}" run --rm \
+  -v "$(pwd)":/code \
+  --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
+  --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
+  cosmwasm/workspace-optimizer:0.17.0
+ls -lh artifacts/
+ls -lh artifacts/cw20_base.wasm
+```
+
+`docker info` は Docker Engine への接続確認である。
+`docker run --rm` はビルド用コンテナを起動し、終了時にコンテナを削除する。
+`-v` は `cw-plus` のルートをコンテナ内の `/code` に対応させ、2つの `--mount` は中間ビルド成果物（`target/`）と取得した Rust パッケージのキャッシュを保持する。
+optimizer はワークスペース全体をビルドし、`artifacts/cw20_base.wasm` などを生成する。`ls -lh` は生成ファイルとサイズの確認に使う。
+
 #### VS Code を SSH で接続する場合
 
 通常は Remote - WSL を使用する。Remote - SSH を使用する場合は、一括セットアップ時に `SETUP_SSH=yes` を指定する。
@@ -109,6 +335,35 @@ jq --version
 cd ~/temp/sus_BC2
 SETUP_SSH=yes ./setup/normal/wsl-kali-experiment-env.sh
 ```
+
+この指定で実行される SSH サーバーの導入と設定は次のとおりである。
+
+```bash
+sudo apt update
+sudo apt install -y openssh-server
+PORT="${PORT:-2222}"
+SSHD_CONFIG="/etc/ssh/sshd_config"
+sudo cp "$SSHD_CONFIG" "${SSHD_CONFIG}.bak.$(date +%Y%m%d%H%M%S)"
+
+set_config() {
+  local key="$1"
+  local value="$2"
+  if sudo grep -Eq "^[#[:space:]]*${key}[[:space:]]+" "$SSHD_CONFIG"; then
+    sudo sed -i -E "s|^[#[:space:]]*${key}[[:space:]]+.*|${key} ${value}|" "$SSHD_CONFIG"
+  else
+    printf '%s %s\n' "$key" "$value" | sudo tee -a "$SSHD_CONFIG" >/dev/null
+  fi
+}
+
+set_config "Port" "$PORT"
+set_config "PasswordAuthentication" "yes"
+set_config "PermitRootLogin" "no"
+sudo service ssh restart
+```
+
+`cp` は変更前の設定を日時付きで保存する。`set_config` は既存の設定行を置換し、該当行がなければ追記する。
+標準ポートは `2222` で、パスワード認証を有効にし、root のログインを無効にする。
+`service ssh restart` は設定を反映するために SSH サーバーを再起動する。
 
 </details>
 
@@ -179,6 +434,57 @@ cd ~/temp/sus_BC2
 source scripts/injectived/load-env.sh
 ```
 
+<details>
+<summary>補足：環境変数の読み込みとウォレット作成のコマンド</summary>
+
+#### 環境変数の設定
+
+`load-env.sh` は `source` で読み込み、現在のシェルに `export` で値を設定する。
+`${変数:-既定値}` は、変数が未設定または空の場合に既定値を使う指定である。すでに設定した値は保持される。
+Injective 用の設定処理は次のとおりである。
+
+```bash
+export KEY_NAME="${KEY_NAME:-testwallet}"
+export CHAIN_ID="${CHAIN_ID:-injective-888}"
+export NODE="${NODE:-https://injective-testnet-rpc.publicnode.com:443}"
+export GAS_PRICES="${GAS_PRICES:-500000000inj}"
+export GAS="${GAS:-1000000}"
+export BANK_SEND_GAS="${BANK_SEND_GAS:-200000}"
+export AMOUNT="${AMOUNT:-100000000inj}"
+export RECIPIENT_ADDR="${RECIPIENT_ADDR:-}"
+export KEYRING_BACKEND="${KEYRING_BACKEND:-test}"
+
+if command -v injectived >/dev/null 2>&1; then
+  export MY_ADDR="${MY_ADDR:-$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND" 2>/dev/null || true)}"
+else
+  export MY_ADDR="${MY_ADDR:-}"
+fi
+export ADDR="${ADDR:-$MY_ADDR}"
+```
+
+`KEY_NAME` は使用する鍵の名前、`CHAIN_ID` と `NODE` は接続先、`GAS_PRICES` はガス単価である。
+`GAS` はガス上限、`BANK_SEND_GAS` は INJ 送金用のガス上限、`AMOUNT` は送金量、`RECIPIENT_ADDR` は送金先を表す。
+`KEYRING_BACKEND` は鍵の保存方式を指定する。`keys show -a` は、鍵に対応するアドレスを取得する。
+鍵がまだない場合、アドレスは空のままとなるため、作成後に取得する。
+
+#### ウォレットの作成とアドレス取得
+
+`create-test-wallet.sh` は、同じ名前の鍵が存在するか確認し、未作成の場合だけウォレットを作成する。
+
+```bash
+if ! injectived keys show "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" >/dev/null 2>&1; then
+  injectived keys add "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND"
+else
+  echo "Wallet already exists: $KEY_NAME"
+fi
+MY_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
+```
+
+`keys add` は鍵とウォレットを作成する。作成後の `MY_ADDR` を Faucet や残高照会に使用する。
+この手動例では現在のシェルにアドレスが設定される。補助スクリプトを実行した場合は、表示される案内に従って環境変数を読み込む。
+
+</details>
+
 ウォレット作成後、[Injective testnet の Faucet](https://cloud.google.com/application/web3/faucet/injective/testnet) で INJ を取得し、残高を確認する。
 
 ```bash
@@ -186,6 +492,34 @@ injectived query bank balances "$MY_ADDR" --node="$NODE"
 ```
 
 送金時は `RECIPIENT_ADDR` と `AMOUNT` を設定し、`CONFIRM_SEND=yes` を指定して `bank-send.sh` を実行する。
+
+<details>
+<summary>補足：bank-send.sh が実行する送金コマンド</summary>
+
+送信元の鍵、送金先、送金量を指定して、次のコマンドを実行する。例の送金先は実際のアドレスに置き換える。
+
+```bash
+RECIPIENT_ADDR="inj1送金先アドレス"
+AMOUNT="100000000inj"
+BANK_SEND_GAS="${BANK_SEND_GAS:-${GAS:-200000}}"
+injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "$AMOUNT" \
+  --from="$KEY_NAME" \
+  --keyring-backend "$KEYRING_BACKEND" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --gas-prices="$GAS_PRICES" \
+  --gas="$BANK_SEND_GAS" \
+  --broadcast-mode sync \
+  -y
+```
+
+`--from` は署名に使う鍵、`--chain-id` と `--node` は接続先を指定する。
+`--gas-prices` と `--gas` は手数料計算に使う設定である。送金には `BANK_SEND_GAS` を使う。
+`--broadcast-mode sync` はトランザクションを送信して応答を受け取る方式で、ブロックへの取り込み結果は TxHash で別途確認する。
+`-y` は CLI の確認を自動承認する指定である。
+`CONFIRM_SEND=yes` は補助スクリプト内の実行条件であり、直接 `injectived` を実行する場合のオプションではない。
+
+</details>
 
 ### トランザクションの確認
 
@@ -220,6 +554,145 @@ source scripts/tokenfactory/load-env.sh
 `create-denom`、`set-metadata`、`mint`、`balance`、`send` の各操作を指定できる。
 `create-denom` で denom を作成してから、メタデータ設定、ミント、送金へ進む。同じ denom の作成は一度だけ行う。
 書き込み操作には `CONFIRM_TX=yes` と、作成手数料・ガス手数料を支払うための INJ 残高が必要である。
+メタデータ設定の実行前に、補足の「メタデータの設定」に記載した CLI 引数の確認事項を参照する。
+
+<details>
+<summary>補足：TokenFactory の環境設定と各操作のコマンド</summary>
+
+#### 環境変数と denom の組み立て
+
+鍵名、チェーン、RPC、ガス単価、鍵の保存方式は Injective の共通設定と同じである。
+TokenFactory 用の `load-env.sh` は、次の固有設定を読み込む。
+
+```bash
+export GAS="${GAS:-300000}"
+export SUBDENOM="${SUBDENOM:-mtk}"
+export RECIPIENT_ADDR="${RECIPIENT_ADDR:-}"
+export SEND_AMOUNT="${SEND_AMOUNT:-1000000}"
+if command -v injectived >/dev/null 2>&1; then
+  export CREATOR_ADDR="${CREATOR_ADDR:-$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND" 2>/dev/null || true)}"
+else
+  export CREATOR_ADDR="${CREATOR_ADDR:-}"
+fi
+if [ -n "$CREATOR_ADDR" ]; then
+  export DENOM="${DENOM:-factory/${CREATOR_ADDR}/${SUBDENOM}}"
+else
+  export DENOM="${DENOM:-}"
+fi
+```
+
+`CREATOR_ADDR` は作成者のアドレス、`SUBDENOM` はトークン名の末尾部分である。
+完全な denom は `factory/作成者アドレス/subdenom` の形式になる。
+補助スクリプトの各操作では、鍵からアドレスを取得し、denom を組み立て直す。
+以下の手動例も、使用する鍵から値を取得する。ガス上限の例は `300000` とする。
+
+```bash
+GAS=300000
+CREATOR_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
+DENOM="factory/${CREATOR_ADDR}/${SUBDENOM}"
+```
+
+`load-env.sh` は既存の `GAS` を保持するため、操作に合わせてガス値を指定する。
+`07-tokenfactory-mtk.sh env` は設定を画面に表示する操作であり、現在のシェルへの読み込みは `source` で行う。
+
+#### denom の作成
+
+`create-denom` では、subdenom、名称、記号、小数桁数を指定する。
+
+```bash
+injectived tx tokenfactory create-denom \
+  "$SUBDENOM" "My Token" "MTK" 6 \
+  --from="$KEY_NAME" \
+  --keyring-backend "$KEYRING_BACKEND" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --gas-prices="$GAS_PRICES" \
+  --gas="$GAS" \
+  -y
+```
+
+作成トランザクションの成功を確認してから、以降の操作へ進む。
+
+#### メタデータの設定
+
+名称、説明、表示単位などを登録する。以下は現在のスクリプトが使う引数を示したものである。
+
+```bash
+injectived tx tokenfactory set-denom-metadata \
+  "My Token Description" \
+  "$DENOM" \
+  "MTK" \
+  "My Token" \
+  "MTK" \
+  "" \
+  "" \
+  "[{\"denom\":\"$DENOM\",\"exponent\":0,\"aliases\":[]},{\"denom\":\"MTK\",\"exponent\":6,\"aliases\":[]}]" \
+  10 \
+  6 \
+  --from="$KEY_NAME" \
+  --keyring-backend "$KEYRING_BACKEND" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --gas-prices="$GAS_PRICES" \
+  --gas="$GAS" \
+  -y
+```
+
+単位の JSON では、最小単位の exponent を `0`、表示単位 `MTK` の exponent を `6` としている。
+現行スクリプトの末尾引数 `10 6` には、CLI の仕様との確認が必要である。
+[公式の公開ソース v1.18.0](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/client/cli/tx.go#L219-L267) では、末尾2引数は `decimals` と `shouldDisableAdminBurn` である。
+この仕様で `10 6` を渡すと、小数桁数は `10`、管理者の burn の無効化は `false`（文字列 `true` の場合だけ有効）として扱われ、作成時と単位 JSON の `6` 桁設定に一致しない。
+[公式のトークン作成ガイド](https://docs.injective.network/developers-defi/token-launch) には9引数の例もあるため、実行前に導入した CLI の引数を次のコマンドで確認する。
+
+```bash
+injectived tx tokenfactory set-denom-metadata --help
+```
+
+上記のコードブロックは現在のスクリプト内容を示したものであり、引数の修正方針は使用する CLI の仕様に合わせて決める。
+
+#### ミント・残高確認・送金
+
+ミントは、数量と denom を連結し、発行先のアドレスを指定する。
+
+```bash
+MINT_AMOUNT="${MINT_AMOUNT:-1000000000}"
+injectived tx tokenfactory mint "${MINT_AMOUNT}${DENOM}" "$CREATOR_ADDR" \
+  --from="$KEY_NAME" \
+  --keyring-backend "$KEYRING_BACKEND" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --gas-prices="$GAS_PRICES" \
+  --gas="$GAS" \
+  -y
+```
+
+`MINT_AMOUNT` は最小単位の数量で、変数自体には denom を含めない。
+次のコマンドは、作成者の銀行残高を JSON で取得する。
+
+```bash
+injectived query bank balances "$CREATOR_ADDR" \
+  --node="$NODE" --chain-id="$CHAIN_ID" -o json | jq
+```
+
+送金は、宛先と最小単位の数量を設定してから実行する。
+
+```bash
+RECIPIENT_ADDR="inj1送金先アドレス"
+SEND_AMOUNT="${SEND_AMOUNT:-1000000}"
+injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "${SEND_AMOUNT}${DENOM}" \
+  --from="$KEY_NAME" \
+  --keyring-backend "$KEYRING_BACKEND" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --gas-prices="$GAS_PRICES" \
+  --gas="$GAS" \
+  -y
+```
+
+`CONFIRM_TX=yes` は補助スクリプト側の実行条件である。直接 CLI を使う場合は、上記のコマンドで処理を実行する。
+各書き込み操作の結果は、返された TxHash で確認する。
+
+</details>
 
 ## Proposer Visualizer の起動
 
@@ -235,6 +708,24 @@ npm run start
 `npm run start` は `public/out/` または `out/` 配下の CSV ファイルを列挙し、起動時に通常は同じディレクトリに `index.json`（マニフェスト）を生成してから Vite 開発サーバーを起動する。
 起動後、ターミナルに表示される URL をブラウザで開く。
 通常は `http://localhost:5173` で確認できる。
+
+<details>
+<summary>補足：Visualizer の起動時に実行するコマンド</summary>
+
+`npm run start` は、マニフェストを生成する処理と、Vite 開発サーバーを起動する処理を順に実行する。
+実際の処理をコマンドで表すと次のようになる。
+
+```bash
+cd ~/temp/sus_BC2/Day1/Proposer-visualizer
+node scripts/gen-manifest.cjs &&
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+`node` は JavaScript のマニフェスト生成プログラムを実行する。
+`&&` は前のコマンドが成功した場合だけ次を実行する指定である。
+`--host 0.0.0.0` は WSL の外側からもアクセスできるように待受先を指定し、`--port 5173` は開発サーバーのポートを指定する。
+
+</details>
 
 マニフェストを生成済みの場合は、次のコマンドで Vite 開発サーバーのみを起動することもできる。
 
@@ -271,14 +762,100 @@ scripts/CW20/create-instantiate-msg.sh
 CW20 の symbol は英字またはハイフンの3〜12文字で指定する。TokenFactory の `factory/.../mtk` という denom は symbol として使用できない。
 
 <details>
-<summary>CW20 の初期化・照会・送金・ミント</summary>
+<summary>補足：CW20 の環境設定・コード登録・初期化・照会・送金・ミント</summary>
+
+#### 環境変数とコード登録
+
+CW20 用の `load-env.sh` は共通の鍵・接続設定に加え、次の保存先と操作用の変数を設定する。
+
+```bash
+export GAS="${GAS:-300000}"
+export WORKDIR="${WORKDIR:-$HOME/temp}"
+export CW_PLUS_DIR="${CW_PLUS_DIR:-$WORKDIR/cw-plus}"
+export WASM_PATH="${WASM_PATH:-$CW_PLUS_DIR/artifacts/cw20_base.wasm}"
+export CODE_ID="${CODE_ID:-}"
+export CONTRACT_ADDR="${CONTRACT_ADDR:-}"
+export RECIPIENT_ADDR="${RECIPIENT_ADDR:-}"
+export CW20_SEND_AMOUNT="${CW20_SEND_AMOUNT:-1000000}"
+export CW20_MINT_AMOUNT="${CW20_MINT_AMOUNT:-1000000}"
+if command -v injectived >/dev/null 2>&1; then
+  export SENDER_ADDR="${SENDER_ADDR:-$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND" 2>/dev/null || true)}"
+else
+  export SENDER_ADDR="${SENDER_ADDR:-}"
+fi
+export MY_ADDR="${MY_ADDR:-$SENDER_ADDR}"
+```
+
+`WASM_PATH` はビルド済みコードの保存先である。
+`11-store-cw20-code.sh` は、このファイルの存在と `CONFIRM_TX=yes` を確認した後、次の登録コマンドを実行する。
+以下の手動例では、コード登録用のガス上限を明示している。
+
+```bash
+GAS=3000000
+injectived tx wasm store "$WASM_PATH" \
+  --from="$KEY_NAME" \
+  --keyring-backend "$KEYRING_BACKEND" \
+  --chain-id="$CHAIN_ID" \
+  --node="$NODE" \
+  --gas-prices="$GAS_PRICES" \
+  --gas="$GAS"
+```
+
+`store` は WASM コードをチェーンへ登録する操作で、成功後に code ID を取得できる。
+このコマンドには `-y` がないため、CLI の確認に応答して実行する。
+`CONFIRM_TX` は補助スクリプトの実行条件であり、直接 CLI を使う例では指定しない。
+
+#### 初期化メッセージの作成
+
+`create-instantiate-msg.sh` は、次の値を使って初期残高と minter を含む JSON を作成する。
+`CREATOR_ADDR` が未設定の場合は、鍵からアドレスを取得する。
+
+```bash
+OUTPUT_FILE="${OUTPUT_FILE:-instantiate_msg.json}"
+TOKEN_NAME="${TOKEN_NAME:-My Token}"
+TOKEN_SYMBOL="${TOKEN_SYMBOL:-MTK}"
+TOKEN_DECIMALS="${TOKEN_DECIMALS:-6}"
+INITIAL_BALANCE="${INITIAL_BALANCE:-1000000}"
+if ! echo "$TOKEN_SYMBOL" | grep -Eq '^[A-Za-z-]{3,12}$'; then
+  echo "symbol は英字またはハイフンの3〜12文字で指定してください" >&2
+  exit 1
+fi
+if [ -z "${CREATOR_ADDR:-}" ]; then
+  CREATOR_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
+fi
+
+cat > "$OUTPUT_FILE" <<EOF
+{
+  "name": "$TOKEN_NAME",
+  "symbol": "$TOKEN_SYMBOL",
+  "decimals": $TOKEN_DECIMALS,
+  "initial_balances": [
+    {
+      "address": "$CREATOR_ADDR",
+      "amount": "$INITIAL_BALANCE"
+    }
+  ],
+  "mint": {
+    "minter": "$CREATOR_ADDR"
+  },
+  "marketing": null
+}
+EOF
+jq . "$OUTPUT_FILE"
+```
+
+`cat > ... <<EOF` は、`EOF` までの内容を変数展開してファイルに書き出す。
+`initial_balances` は初期残高の宛先と最小単位の数量、`mint.minter` は追加発行できるアドレスを指定する。
+`jq .` は生成した JSON の構文と内容を確認する。
 
 #### コントラクトの初期化
 
 コード登録時の TxHash を使って「トランザクションの確認」のコマンドを実行し、結果の `events` から `code_id` を確認する。
 取得した値を `CODE_ID` に設定し、初期化メッセージを使ってコントラクトを作成する。
+以下では、コード登録用に設定したガス上限を、初期化・送金・ミントで使う設定例の `300000` に変更する。`source` は既存の `GAS` を保持するため、この変更を明示している。
 
 ```bash
+GAS=300000
 CODE_ID="取得したcode_id"
 source scripts/CW20/load-env.sh
 injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
