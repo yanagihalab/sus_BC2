@@ -532,6 +532,44 @@ bash ./gradlew :simulator:run
 `injectived` を使う CLI 操作は、[docs/injective-setup.md](docs/injective-setup.md) を参照する。
 主手順 3 の環境構築後、同文書の手順に従って実験を進める。
 
+### 初回発行時に denom・名称・シンボルを指定する
+
+本リポジトリで denom・名称・シンボルをまとめて指定するのは、TokenFactory の初回発行コマンドである。
+環境構築スクリプトによる CLI の準備・CW20 のビルドが完了した後、トークンの発行を別途行う。
+[CLI の接続設定とウォレットの準備](docs/injective-setup.md)を済ませ、残高を確認した後、同じ Bash で以下を実行する。
+`mytoken`、`My Token`、`MTK` を、発行するトークンに合わせて変更する。
+
+```bash
+cd ~/temp/sus_BC2
+# 発行するトークンの denom の末尾部分を指定する。
+export SUBDENOM="mytoken"
+# トークンの名称を指定する。
+export TOKEN_NAME="My Token"
+# トークンのシンボルを指定する。
+export TOKEN_SYMBOL="MTK"
+# 小数桁数と、作成トランザクションのガス上限を指定する。
+export TOKEN_DECIMALS=6
+export GAS=300000
+
+CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh create-denom
+```
+
+| 指定する項目 | 入力箇所 | 上の例 |
+| --- | --- | --- |
+| 発行トークンの denom の末尾 | `SUBDENOM` | `mytoken` |
+| 名称 | `TOKEN_NAME` | `My Token` |
+| シンボル | `TOKEN_SYMBOL` | `MTK` |
+| 小数桁数 | `TOKEN_DECIMALS` | `6` |
+
+完全な denom は、使用する鍵のアドレスから `factory/作成者アドレス/SUBDENOM` の形式で組み立てられる。
+上の例では `factory/作成者アドレス/mytoken` となる。任意に入力するのは末尾の `mytoken` 部分である。
+同じ作成者アドレスで新規発行する場合は、未使用の `SUBDENOM` を指定する。後続のメタデータ設定やミントでも、作成時の `SUBDENOM` を引き継ぐ。
+
+[発行スクリプト](setup/normal/07-tokenfactory-mtk.sh)は、`SUBDENOM → TOKEN_NAME → TOKEN_SYMBOL → TOKEN_DECIMALS` の順番で CLI の位置引数へ値を渡す。
+
+作成後は、[TokenFactory の操作手順](docs/injective-setup.md)に従って TxHash を照会し、`code: 0` を確認してから次へ進む。
+CW20 コントラクトの発行には、別の[初期化メッセージ作成手順](docs/cw20-instantiate-message.md)を使う。CW20 の `name`・`symbol` は同手順で指定し、`denom` の入力欄は TokenFactory の発行手順にある。
+
 ## Proposer Visualizer の起動
 
 Proposer Visualizer は、Day1 の実験で作成した提案者の系列（proposer sequence）を CSV ファイルから読み込み、ブラウザで可視化する Vite + React アプリである。
