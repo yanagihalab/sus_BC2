@@ -126,12 +126,12 @@ capture_tx_state() {
   printf '\\n__TX_TEST_STATE__\\n'
   jq -nc --arg hash "${TX_HASH-}" --arg result "${TX_RESULT-}" \\
     --arg event "${EVENT_VALUE-}" --arg code_id "${CODE_ID-}" --arg contract "${CONTRACT_ADDR-}" \\
-    --arg inj_hash "${INJ_SEND_TX_HASH-}" \\
+    --arg inj_hash "${INJ_SEND_TX_HASH-}" --arg inj_status "${INJ_SEND_STATUS-}" \\
     --arg create_hash "${CREATE_DENOM_TX_HASH-}" --arg metadata_hash "${METADATA_TX_HASH-}" \\
     --arg tf_mint_hash "${TOKENFACTORY_MINT_TX_HASH-}" --arg tf_send_hash "${TOKENFACTORY_SEND_TX_HASH-}" \\
     --arg store_hash "${STORE_TX_HASH-}" --arg instantiate_hash "${INSTANTIATE_TX_HASH-}" \\
     --arg send_hash "${CW20_SEND_TX_HASH-}" --arg mint_hash "${CW20_MINT_TX_HASH-}" \\
-    '{hash:$hash,result:$result,event:$event,code_id:$code_id,contract:$contract,inj_hash:$inj_hash,hashes:[$create_hash,$metadata_hash,$tf_mint_hash,$tf_send_hash,$store_hash,$instantiate_hash,$send_hash,$mint_hash]}'
+    '{hash:$hash,result:$result,event:$event,code_id:$code_id,contract:$contract,inj_hash:$inj_hash,inj_status:$inj_status,hashes:[$create_hash,$metadata_hash,$tf_mint_hash,$tf_send_hash,$store_hash,$instantiate_hash,$send_hash,$mint_hash]}'
   exit "$tx_test_status"
 }
 trap capture_tx_state EXIT
@@ -166,6 +166,9 @@ trap capture_tx_state EXIT
         workspace.mkdir()
         (workspace / "scripts").symlink_to(ROOT / "scripts", target_is_directory=True)
         (workspace / "setup").symlink_to(ROOT / "setup", target_is_directory=True)
+        standard_checkout = self.directory / "temp/sus_BC2"
+        standard_checkout.parent.mkdir()
+        standard_checkout.symlink_to(workspace, target_is_directory=True)
         wasm = self.directory / "sample.wasm"
         wasm.write_bytes(b"mock wasm")
         return workspace, wasm
@@ -177,6 +180,16 @@ trap capture_tx_state EXIT
         sending = sending.replace(recipient_setting, 'export RECIPIENT_ADDR="$MOCK_RECIPIENT"')
         between = 'export TX_HASH="$OTHER_TX_HASH"\n' if replace_generic_hash else ""
         return sending + between + self.document_main_program("## 5.")
+
+    def shell_survival_probe(self):
+        return '''
+false
+unset TX_TEST_UNSET
+printf '%s\\n' "$TX_TEST_UNSET"
+false | true
+printf '__PIPEFAIL_STATUS__=%s\\n' "$?"
+printf '%s\\n' '__PARENT_SHELL_ALIVE__'
+'''
 
     def calls(self):
         return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
@@ -477,6 +490,7 @@ trap capture_tx_state EXIT
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(state["inj_hash"], HASH)
+                self.assertEqual(state["inj_status"], "0")
                 self.assertEqual(state["hash"], HASH)
                 self.assertEqual(len(self.sends()), 1)
                 self.assertEqual([call[2] for call in self.queries()], [HASH, HASH])
@@ -485,22 +499,37 @@ trap capture_tx_state EXIT
                 self.assertIn("--gas=200000", sending)
                 self.assertEqual(sending[-5:], ["--output", "json", "--broadcast-mode", "sync", "-y"])
 
-    def test_failed_inj_send_clears_old_hash_and_stops_before_step_five(self):
+    def test_failed_inj_send_keeps_shell_alive_and_step_five_preserves_pending_hash(self):
         workspace, _ = self.transaction_workspace()
-        for configuration, expected_status, query_count in (
-            ({"broadcast": {"output": "", "status": 42}}, 42, 0),
-            ({"queries": [{"output": confirmed(code=9)}]}, 1, 1),
+        for configuration, expected_status, send_count, query_count, pending_hash, missing_helper in (
+            ({"broadcast": {"output": "", "status": 42}}, 42, 1, 0, "", False),
+            ({"queries": [{"output": confirmed(code=9)}]}, 1, 1, 1, HASH, False),
+            ({"queries": [{"output": "", "status": 1}]}, 1, 1, 2, HASH, False),
+            ({}, 1, 0, 0, "", True),
         ):
-            with self.subTest(configuration=configuration):
+            with self.subTest(configuration=configuration, missing_helper=missing_helper):
                 self.configure(**configuration)
+                program = self.document_bank_program()
+                if missing_helper:
+                    program = program.replace(
+                        "source scripts/injectived/tx-utils.sh", 'source "$MISSING_TX_HELPER"',
+                    )
+                program = "set -euo pipefail\n" + program + self.shell_survival_probe()
                 result, state = self.run_shell(
-                    self.document_bank_program(), cwd=workspace, MOCK_RECIPIENT=RECIPIENT,
+                    program, cwd=workspace, MOCK_RECIPIENT=RECIPIENT,
                     KEY_NAME="testwallet", KEYRING_BACKEND="test", GAS_PRICES="500000000inj",
                     INJ_SEND_TX_HASH=OTHER_HASH, TX_HASH=OTHER_HASH, TX_RESULT="stale",
+                    TX_MAX_ATTEMPTS="2", TX_RETRY_DELAY="0",
+                    MISSING_TX_HELPER=str(self.directory / "missing-tx-utils.sh"),
                 )
-                self.assertEqual(result.returncode, expected_status, result.stderr)
-                self.assert_failed_without_result(result, state)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("__PARENT_SHELL_ALIVE__", result.stdout)
+                self.assertIn("__PIPEFAIL_STATUS__=0", result.stdout)
+                self.assertEqual(state["inj_status"], str(expected_status))
                 self.assertEqual(state["inj_hash"], "")
+                self.assertEqual(state["hash"], pending_hash)
+                self.assertEqual(state["result"], "")
+                self.assertEqual(len(self.sends()), send_count)
                 self.assertEqual(len(self.queries()), query_count)
 
     def test_bank_confirmation_gate_prevents_sending_and_saving_a_hash(self):
@@ -543,25 +572,51 @@ trap capture_tx_state EXIT
         self.assertEqual(len(self.sends()), 1)
         self.assertEqual(len(self.queries()), 1)
 
-    def test_missing_run_tx_cannot_preserve_or_export_an_old_store_hash(self):
+    def test_missing_run_tx_keeps_shell_alive_without_an_old_store_hash(self):
         workspace, wasm = self.transaction_workspace()
         program, inserted = re.subn(
             r"^run_tx ", "unset -f run_tx\nrun_tx ",
             self.document_main_program("### 7.1."), flags=re.MULTILINE,
         )
         self.assertEqual(inserted, 1, "Expected one store command in step 7.1")
+        program = "set -euo pipefail\n" + program + '''
+printf '__MISSING_RUN_TX_STATUS__=%s\\n' "$?"
+''' + self.shell_survival_probe()
         result, state = self.run_shell(
             program, cwd=workspace, MY_ADDR=ADDRESS, WASM_PATH=str(wasm),
             STORE_TX_HASH=OTHER_HASH, TX_HASH=OTHER_HASH, TX_RESULT="stale",
             CODE_ID="999", CONTRACT_ADDR="inj1oldcontract",
         )
-        self.assertEqual(result.returncode, 127)
-        self.assert_failed_without_result(result, state, sends=0)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("__MISSING_RUN_TX_STATUS__=127", result.stdout)
+        self.assertIn("__PARENT_SHELL_ALIVE__", result.stdout)
+        self.assertIn("__PIPEFAIL_STATUS__=0", result.stdout)
+        self.assertEqual(state["result"], "")
+        self.assertEqual(self.sends(), [])
         self.assertEqual(state["hashes"][4], "")
         self.assertEqual(state["hash"], "")
         self.assertEqual(state["code_id"], "")
         self.assertEqual(state["contract"], "")
         self.assertEqual(self.queries(), [])
+
+    def test_failed_documented_event_extraction_does_not_export_or_print_identifiers(self):
+        for heading, label in (("### 7.2.", "CODE_ID="), ("### 7.5.", "CONTRACT_ADDR=")):
+            with self.subTest(heading=heading):
+                program = (
+                    'set +e +u\nsource "$TX_HELPER"\nunset CODE_ID CONTRACT_ADDR\n'
+                    + self.document_main_program(heading)
+                    + 'bash -uc \'[ "${CODE_ID+x}" != x ] && [ "${CONTRACT_ADDR+x}" != x ]\' || exit $?\n'
+                    + "printf '%s\\n' '__EXTRACTION_PARENT_ALIVE__'\n"
+                )
+                result, state = self.run_shell(
+                    program, TX_HELPER=str(HELPER), TX_RESULT=json.dumps(confirmed(events=[])),
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("__EXTRACTION_PARENT_ALIVE__", result.stdout)
+                self.assertNotIn(label, result.stdout)
+                self.assertEqual(state["code_id"], "")
+                self.assertEqual(state["contract"], "")
+                self.assertEqual(self.calls(), [])
 
     def test_store_timeout_recovers_with_wait_only_in_the_same_session(self):
         wasm = self.directory / "sample.wasm"

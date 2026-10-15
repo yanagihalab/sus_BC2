@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # Source this file in Bash so transaction results stay in the current shell.
+if [ -z "${BASH_VERSION:-}" ]; then
+  echo "Load scripts/injectived/tx-utils.sh in Bash. Run bash first, then source this file." >&2
+  return 1
+fi
+
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   echo "Source scripts/injectived/tx-utils.sh before using run_tx or wait_tx." >&2
   exit 1
@@ -90,6 +95,7 @@ run_tx() {
     return "$status"
   fi
   export TX_HASH="$hash" || return "$?"
+  printf 'Submitted transaction: TX_HASH=%s\n' "$TX_HASH" >&2
   if code="$(_injective_tx_uint code <<< "$body")"; then :; else
     status=$?
     echo "Transaction submission is missing a valid code." >&2
