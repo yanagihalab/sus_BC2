@@ -38,10 +38,10 @@ export MY_ADDR
 export ADDR="$MY_ADDR"
 export RECIPIENT_ADDR="$MY_ADDR"
 injectived keys list --keyring-backend "$KEYRING_BACKEND"
-printf '送信元: %s\n受取先: %s\n' "$MY_ADDR" "$RECIPIENT_ADDR"
+printf 'Sender: %s\nRecipient: %s\n' "$MY_ADDR" "$RECIPIENT_ADDR"
 ```
 
-`MY_ADDR` と `ADDR` は自分のアドレス、`RECIPIENT_ADDR` は送金先である。初期設定では同じアドレスを使う。
+`MY_ADDR` と `ADDR` は自分のアドレス、`RECIPIENT_ADDR` は送金先である。初期設定では同じアドレスを使う。表示の `Sender` は送信元、`Recipient` は受取先を表す。
 作成された鍵を使って、後続の送金・トークン作成・コントラクト操作を行う。新しいターミナルを開いた場合は、手順 1・2 を実行し直す。
 
 <details>
@@ -230,13 +230,13 @@ check_tx() {
 }
 ```
 
-返された TxHash を指定して確認する。
+INJ 送金で返された TxHash を、次の空の二重引用符の間に入力してから実行する。
 
 ```bash
-check_tx "INJ送金で返されたTxHash"
+check_tx ""
 ```
 
-`check_tx` の引数は、その操作で返された実際の TxHash に置き換える。まだ見つからない場合は、数秒待って同じコマンドを再実行する。以降の操作でもこの関数を使用する。
+以降の `check_tx` も、空の二重引用符の間に、その操作で返された実際の TxHash を手入力してから実行する。まだ見つからない場合は、数秒待って同じ照会コマンドを再実行する。
 
 トランザクションは、次の Explorer でも確認できる。
 
@@ -262,8 +262,10 @@ source scripts/tokenfactory/load-env.sh
 CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh create-denom
 ```
 
+denom 作成で返された TxHash を、二重引用符の間に入力してから実行する。
+
 ```bash
-check_tx "denom作成で返されたTxHash"
+check_tx ""
 ```
 
 ### 6.2. メタデータを設定する
@@ -322,7 +324,7 @@ set_token_metadata() {
   elif grep -Eq 'set-denom-metadata .*\[decimals\]([[:space:]]+\[flags\])?[[:space:]]*$' <<< "$metadata_help"; then
     metadata_args=("$TOKEN_DECIMALS")
   else
-    echo "Usage の位置引数を確認してからメタデータを設定してください。" >&2
+    echo "Unsupported metadata arguments. Check the CLI Usage." >&2
     return 1
   fi
   injectived tx tokenfactory set-denom-metadata \
@@ -338,8 +340,10 @@ set_token_metadata
 
 </details>
 
+メタデータ設定で返された TxHash を、二重引用符の間に入力してから実行する。
+
 ```bash
-check_tx "メタデータ設定で返されたTxHash"
+check_tx ""
 ```
 
 確定成功を確認したら、対象の `DENOM` に登録されたメタデータを照会する。
@@ -359,8 +363,10 @@ injectived query bank denom-metadata "$DENOM" \
 MINT_AMOUNT=1000000000 CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh mint
 ```
 
+MTK のミントで返された TxHash を、二重引用符の間に入力してから実行する。
+
 ```bash
-check_tx "MTKミントで返されたTxHash"
+check_tx ""
 ```
 
 ### 6.4. 残高を確認する
@@ -378,8 +384,10 @@ export SEND_AMOUNT=1000000
 CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh send
 ```
 
+MTK の送金で返された TxHash を、二重引用符の間に入力してから実行する。
+
 ```bash
-check_tx "MTK送金で返されたTxHash"
+check_tx ""
 ```
 
 ```bash
@@ -532,22 +540,25 @@ export GAS=3000000
 export SENDER_ADDR="$MY_ADDR"
 export CREATOR_ADDR="$MY_ADDR"
 source scripts/CW20/load-env.sh
-printf '署名者: %s\nWASM: %s\n' "$SENDER_ADDR" "$WASM_PATH"
+printf 'Signer: %s\nWASM: %s\n' "$SENDER_ADDR" "$WASM_PATH"
 CONFIRM_TX=yes bash ./setup/normal/11-store-cw20-code.sh
 ```
 
 CLI の実行確認が表示されたら、内容を確認して `y` を入力し、`Enter` を押す。
+表示の `Signer` は署名者のアドレス、`WASM` は登録するファイルのパスを表す。
 
 ### 7.2. 登録結果を確認し、code ID を設定する
 
+WASM 登録で返された TxHash を、二重引用符の間に入力してから実行する。
+
 ```bash
-check_tx "WASM登録で返されたTxHash"
+check_tx ""
 ```
 
-成功したトランザクションの `events` にある `code_id` を読み取り、次の値に設定する。
+成功したトランザクションの `events` にある `code_id` を読み取り、次の空の二重引用符の間に入力してから実行する。
 
 ```bash
-export CODE_ID="取得したcode_id"
+export CODE_ID=""
 ```
 
 ### 7.3. 初期化メッセージを作成する
@@ -573,16 +584,18 @@ injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
   --gas-prices="$GAS_PRICES" --gas="$GAS" --output json -y
 ```
 
+初期化で返された TxHash を、二重引用符の間に入力してから実行する。
+
 ```bash
-check_tx "初期化で返されたTxHash"
+check_tx ""
 ```
 
 ### 7.5. コントラクトアドレスを設定する
 
-成功したトランザクションの `events` にある `_contract_address` または `contract_address` を読み取り、次の値に設定する。
+成功したトランザクションの `events` にある `_contract_address` または `contract_address` を読み取り、次の空の二重引用符の間に入力してから実行する。
 
 ```bash
-export CONTRACT_ADDR="取得したcontract_address"
+export CONTRACT_ADDR=""
 ```
 
 ### 7.6. トークン情報と残高を確認する
@@ -607,8 +620,10 @@ injectived tx wasm execute "$CONTRACT_ADDR" \
   --gas-prices "$GAS_PRICES" --gas "$GAS" --output json -y
 ```
 
+CW20 の送金で返された TxHash を、二重引用符の間に入力してから実行する。
+
 ```bash
-check_tx "CW20送金で返されたTxHash"
+check_tx ""
 ```
 
 ```bash
@@ -629,8 +644,10 @@ injectived tx wasm execute "$CONTRACT_ADDR" \
   --gas-prices "$GAS_PRICES" --gas "$GAS" --output json -y
 ```
 
+CW20 のミントで返された TxHash を、二重引用符の間に入力してから実行する。
+
 ```bash
-check_tx "CW20ミントで返されたTxHash"
+check_tx ""
 ```
 
 ```bash
@@ -687,12 +704,12 @@ injectived tx wasm store "$WASM_PATH" \
 #### コントラクトの初期化
 
 コード登録時の TxHash を使って手順 5 の `check_tx` を実行し、結果の `events` から `code_id` を確認する。
-取得した値を `CODE_ID` に設定し、初期化メッセージを使ってコントラクトを作成する。
+取得した値を、次の `CODE_ID` の空の二重引用符の間に入力し、初期化メッセージを使ってコントラクトを作成する。
 以下では、コード登録用に設定したガス上限を、初期化・送金・ミントで使う設定例の `300000` に変更する。`source` は既存の `GAS` を保持するため、この変更を明示している。
 
 ```bash
 GAS=300000
-CODE_ID="取得したcode_id"
+CODE_ID=""
 source scripts/CW20/load-env.sh
 injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
   --from="$KEY_NAME" \
@@ -709,9 +726,10 @@ injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
 
 初期化の TxHash で結果を確認し、`events` 内の `_contract_address` または `contract_address` の値を `CONTRACT_ADDR` に設定する。
 `CODE_ID` は保存済みコードの番号、`CONTRACT_ADDR` は作成したコントラクトのアドレスであり、別の値である。
+取得したコントラクトアドレスを、次の空の二重引用符の間に入力してから実行する。
 
 ```bash
-CONTRACT_ADDR="取得したcontract_address"
+CONTRACT_ADDR=""
 source scripts/CW20/load-env.sh
 ```
 
