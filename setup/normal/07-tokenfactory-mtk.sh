@@ -75,8 +75,6 @@ EOF
       --node="$NODE" \
       --gas-prices="$GAS_PRICES" \
       --gas="$GAS" \
-      --output json \
-      --broadcast-mode sync \
       -y
     ;;
   set-metadata)
@@ -109,8 +107,6 @@ EOF
       --node="$NODE" \
       --gas-prices="$GAS_PRICES" \
       --gas="$GAS" \
-      --output json \
-      --broadcast-mode sync \
       -y
     ;;
   mint)
@@ -127,8 +123,6 @@ EOF
       --node="$NODE" \
       --gas-prices="$GAS_PRICES" \
       --gas="$GAS" \
-      --output json \
-      --broadcast-mode sync \
       -y
     ;;
   balance)
@@ -155,8 +149,6 @@ EOF
       --node="$NODE" \
       --gas-prices="$GAS_PRICES" \
       --gas="$GAS" \
-      --output json \
-      --broadcast-mode sync \
       -y
     ;;
   help|*)
