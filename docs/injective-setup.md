@@ -233,6 +233,11 @@ check_tx() {
     --output json)" || return
   printf '%s\n' "$tx_result" | jq
 }
+```
+
+返された TxHash を指定して確認する。
+
+```bash
 check_tx "INJ送金で返されたTxHash"
 ```
 
@@ -248,8 +253,12 @@ check_tx "INJ送金で返されたTxHash"
 ### 6.1. 設定を読み込み、denom を作成する
 
 同じ鍵・subdenom の組み合わせでの作成は一度だけ行う。作成済みなら作成コマンドを省略するか、`SUBDENOM` を未使用の名前に変更する。
+名称・シンボル・小数桁数を変更する場合は、次の設定値を編集する。新規作成時の小数桁数は [0〜24 の範囲](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/types/denoms.go)で指定する。本書の数量例は `6` 桁を前提としている。
 
 ```bash
+export TOKEN_NAME="My Token"
+export TOKEN_SYMBOL="MTK"
+export TOKEN_DECIMALS=6
 export GAS=300000
 export SUBDENOM="mtk"
 export CREATOR_ADDR="$MY_ADDR"
@@ -264,8 +273,32 @@ check_tx "denom作成で返されたTxHash"
 
 ### 6.2. メタデータを設定する
 
-`set-metadata` は、使用中の CLI の Usage を確認して、小数桁数 `6` に合う末尾引数を選ぶ。
-[公式 v1.18.0 の CLI](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/client/cli/tx.go#L219-L267) は末尾に `[decimals] [shouldDisableAdminBurn]` を取り、[公式ガイド](https://docs.injective.network/developers-defi/token-launch) は `[decimals]` のみの例を掲載している。補助スクリプトは `6 false` または `6` を渡し、どちらにも一致しない場合やヘルプ取得に失敗した場合は送信せず停止する。
+変更したい値を編集し、同じ Bash で設定する。作成済みトークンのメタデータを編集する場合も、この設定と次の `set-metadata` を実行する。denom の作成コマンドを再実行する必要はない。
+
+```bash
+export TOKEN_NAME="My Token"
+export TOKEN_SYMBOL="MTK"
+export TOKEN_DESCRIPTION="My Token Description"
+export TOKEN_DISPLAY="MTK"
+export TOKEN_DECIMALS=6
+export TOKEN_URI=""
+export TOKEN_URI_HASH=""
+```
+
+| 変数 | 編集する内容 |
+| --- | --- |
+| `TOKEN_NAME` | トークンの名称 |
+| `TOKEN_SYMBOL` | シンボル |
+| `TOKEN_DESCRIPTION` | 説明文。空文字で削除できる |
+| `TOKEN_DISPLAY` | 表示単位の denom。未指定の場合はシンボルを使う |
+| `TOKEN_DECIMALS` | 表示単位の小数桁数。作成時と同じ値を使う |
+| `TOKEN_URI`・`TOKEN_URI_HASH` | メタデータの参照先とハッシュ。使用しない場合は空文字にする |
+
+編集対象の `KEY_NAME`・`SUBDENOM` を引き継ぎ、管理者の鍵で実行する。表示名やシンボルを編集しても、対象の `factory/作成者アドレス/subdenom` は変更しない。
+`TOKEN_DECIMALS=0` の場合は `TOKEN_DISPLAY="$DENOM"` とする。表示単位を省略した場合も、0桁では最小単位の denom を使う。小数桁数を変更して新規作成する場合は、以降のミント・送金量もその桁数に合わせる。
+
+`set-metadata` は、使用中の CLI の Usage を確認して末尾引数を選ぶ。
+[公式 v1.18.0 の CLI](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/client/cli/tx.go#L219-L267) は末尾に `[decimals] [shouldDisableAdminBurn]` を取り、[公式ガイド](https://docs.injective.network/developers-defi/token-launch) は `[decimals]` のみの例を掲載している。補助スクリプトは `TOKEN_DECIMALS` と `false`、または `TOKEN_DECIMALS` のみを渡し、どちらにも一致しない場合やヘルプ取得に失敗した場合は送信せず停止する。
 
 ```bash
 CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh set-metadata
@@ -274,25 +307,32 @@ CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh set-metadata
 <details>
 <summary>補足：メタデータ設定を CLI で直接実行する場合</summary>
 
-補助スクリプトの代わりに次の関数を実行できる。補助スクリプトと同じ判定で引数を選ぶ。
+補助スクリプトの代わりに次の関数を実行できる。手順 6.2 で設定した値を使い、補助スクリプトと同じ Usage の判定で末尾引数を選ぶ。上の `set-metadata` とこの代替コマンドの両方を実行する必要はない。
 
 ```bash
 set_token_metadata() {
   local metadata_help
   local metadata_args
+  local metadata_units
+  metadata_units="$(jq -cn \
+    --arg base "$DENOM" --arg display "$TOKEN_DISPLAY" \
+    --argjson decimals "$TOKEN_DECIMALS" \
+    '[{denom:$base,exponent:0,aliases:[]}] +
+     (if $display == $base then []
+      else [{denom:$display,exponent:$decimals,aliases:[]}] end)')" || return
   metadata_help="$(injectived tx tokenfactory set-denom-metadata --help)" || return
   printf '%s\n' "$metadata_help"
   if grep -Fq '[shouldDisableAdminBurn]' <<< "$metadata_help"; then
-    metadata_args=(6 false)
+    metadata_args=("$TOKEN_DECIMALS" false)
   elif grep -Eq 'set-denom-metadata .*\[decimals\]([[:space:]]+\[flags\])?[[:space:]]*$' <<< "$metadata_help"; then
-    metadata_args=(6)
+    metadata_args=("$TOKEN_DECIMALS")
   else
     echo "Usage の位置引数を確認してからメタデータを設定してください。" >&2
     return 1
   fi
   injectived tx tokenfactory set-denom-metadata \
-    "My Token Description" "$DENOM" "MTK" "My Token" "MTK" "" "" \
-    "[{\"denom\":\"$DENOM\",\"exponent\":0,\"aliases\":[]},{\"denom\":\"MTK\",\"exponent\":6,\"aliases\":[]}]" \
+    "$TOKEN_DESCRIPTION" "$DENOM" "$TOKEN_DISPLAY" "$TOKEN_NAME" "$TOKEN_SYMBOL" \
+    "$TOKEN_URI" "$TOKEN_URI_HASH" "$metadata_units" \
     "${metadata_args[@]}" \
     --from="$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" \
     --chain-id="$CHAIN_ID" --node="$NODE" \
@@ -313,6 +353,9 @@ check_tx "メタデータ設定で返されたTxHash"
 
 ```bash
 MINT_AMOUNT=1000000000 CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh mint
+```
+
+```bash
 check_tx "MTKミントで返されたTxHash"
 ```
 
@@ -329,7 +372,13 @@ bash ./setup/normal/07-tokenfactory-mtk.sh balance
 ```bash
 export SEND_AMOUNT=1000000
 CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh send
+```
+
+```bash
 check_tx "MTK送金で返されたTxHash"
+```
+
+```bash
 injectived query bank balances "$RECIPIENT_ADDR" \
   --node="$NODE" --chain-id="$CHAIN_ID" --output json | jq
 ```
@@ -396,7 +445,7 @@ DENOM=[factory/inj.../mtk]
 
 ```bash
 injectived tx tokenfactory create-denom \
-  "$SUBDENOM" "My Token" "MTK" 6 \
+  "$SUBDENOM" "$TOKEN_NAME" "$TOKEN_SYMBOL" "$TOKEN_DECIMALS" \
   --from="$KEY_NAME" \
   --keyring-backend "$KEYRING_BACKEND" \
   --chain-id="$CHAIN_ID" \
@@ -410,18 +459,18 @@ injectived tx tokenfactory create-denom \
 
 #### メタデータの設定
 
-名称、説明、表示単位などを登録する。実行には手順 6.2 の `set-metadata` または CLI の直接実行例を使用する。
+名称、説明、表示単位などを登録する。実行には手順 6.2 の設定値を編集し、`set-metadata` または CLI の直接実行例を使用する。
 
-単位の JSON では、最小単位の exponent を `0`、表示単位 `MTK` の exponent を `6` としている。
+単位の JSON は設定値から組み立てる。最小単位の exponent は `0`、別の表示単位の exponent は `TOKEN_DECIMALS` とする。表示単位が最小単位と同じ場合は1件にまとめる。
 [公式の公開ソース v1.18.0](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/client/cli/tx.go#L219-L267) では、末尾2引数は `decimals` と `shouldDisableAdminBurn` である。
-この仕様では末尾に `6 false` を渡し、小数桁数を `6`、管理者の burn の無効化を `false` とする。
-[公式のトークン作成ガイド](https://docs.injective.network/developers-defi/token-launch) の9引数の例では、末尾に `6` のみを渡す。補助スクリプトは、次のコマンドの Usage を確認して引数を切り替える。
+この仕様では末尾に `TOKEN_DECIMALS` と `false` を渡す。
+[公式のトークン作成ガイド](https://docs.injective.network/developers-defi/token-launch) の9引数の例では、末尾に小数桁数のみを渡す。補助スクリプトは、次のコマンドの Usage を確認して引数を切り替える。
 
 ```bash
 injectived tx tokenfactory set-denom-metadata --help
 ```
 
-Usage に想定した末尾引数が見つからない場合は送信せず停止する。小数桁数と単位 JSON の exponent は、作成時の `6` 桁設定にそろえている。
+Usage に想定した末尾引数が見つからない場合は送信せず停止する。小数桁数には作成時と同じ値を使う。
 
 #### ミント・残高確認・送金
 
@@ -518,6 +567,9 @@ injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
   --chain-id="$CHAIN_ID" --node="$NODE" \
   --label "cw20-mtk-sample" --no-admin \
   --gas-prices="$GAS_PRICES" --gas="$GAS" --output json -y
+```
+
+```bash
 check_tx "初期化で返されたTxHash"
 ```
 
@@ -549,7 +601,13 @@ injectived tx wasm execute "$CONTRACT_ADDR" \
   --from "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" \
   --chain-id "$CHAIN_ID" --node "$NODE" \
   --gas-prices "$GAS_PRICES" --gas "$GAS" --output json -y
+```
+
+```bash
 check_tx "CW20送金で返されたTxHash"
+```
+
+```bash
 injectived q wasm contract-state smart "$CONTRACT_ADDR" \
   '{"balance":{"address":"'"$RECIPIENT_ADDR"'"}}' --node "$NODE" --output json | jq
 ```
@@ -565,7 +623,13 @@ injectived tx wasm execute "$CONTRACT_ADDR" \
   --from "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" \
   --chain-id "$CHAIN_ID" --node "$NODE" \
   --gas-prices "$GAS_PRICES" --gas "$GAS" --output json -y
+```
+
+```bash
 check_tx "CW20ミントで返されたTxHash"
+```
+
+```bash
 injectived q wasm contract-state smart "$CONTRACT_ADDR" \
   '{"balance":{"address":"'"$SENDER_ADDR"'"}}' --node "$NODE" --output json | jq
 ```
