@@ -14,8 +14,10 @@
 
 ```bash
 cd ~/temp/sus_BC2
+# 使用する鍵名を指定する。新しいウォレットを作る場合は未使用の名前に変更する。
 export KEY_NAME="testwallet"
 export KEYRING_BACKEND="test"
+# 接続するチェーンの ID と RPC URL を指定する。
 export CHAIN_ID="injective-888"
 export NODE="https://injective-testnet-rpc.publicnode.com:443"
 export GAS_PRICES="500000000inj"
@@ -32,6 +34,7 @@ source scripts/injectived/load-env.sh
 手順 1 で設定した鍵名と keyring backend を使い、自分のウォレットを作成する。そのアドレスを送信元と受取先に設定する。作成済みのウォレットを使う場合は、最初の `injectived keys add` の行を省略する。
 
 ```bash
+# 作成済みのウォレットを使う場合は、次の keys add の行を省略する。
 injectived keys add "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND"
 MY_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
 export MY_ADDR
@@ -53,8 +56,10 @@ printf 'Sender: %s\nRecipient: %s\n' "$MY_ADDR" "$RECIPIENT_ADDR"
 ウォレット作成後に、接続設定とアドレスを手動で設定する場合は次のように実行する。
 
 ```bash
+# 使用する鍵名を指定する。新しいウォレットを作る場合は未使用の名前に変更する。
 export KEY_NAME="testwallet"
 export KEYRING_BACKEND="test"
+# 接続するチェーンの ID と RPC URL を指定する。
 export CHAIN_ID="injective-888"
 export NODE="https://injective-testnet-rpc.publicnode.com:443"
 export GAS_PRICES="500000000inj"
@@ -77,6 +82,7 @@ export RECIPIENT_ADDR="$MY_ADDR"
 ウォレットの作成には `keys add`、アドレスの取得には `keys show -a` を使う。
 
 ```bash
+# 作成済みのウォレットを使う場合は、次の keys add の行を省略する。
 injectived keys add "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND"
 MY_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
 export MY_ADDR
@@ -106,10 +112,11 @@ injectived query bank balances "$MY_ADDR" \
 
 ## 4. INJを送金する
 
-初期設定の宛先は自分の `MY_ADDR` である。この手順では別の宛先へ `0.001 INJ` を送金するため、`inj1...` を実際の受取アドレスに置き換えて `RECIPIENT_ADDR` に設定する。
+初期設定の宛先は自分の `MY_ADDR` である。この手順では別の宛先へ `0.001 INJ` を送金するため、実際の受取アドレスを `RECIPIENT_ADDR` に設定する。
 
 ```bash
-export RECIPIENT_ADDR="inj1..."
+# 二重引用符の間に実際の受取アドレスを入力してから実行する。
+export RECIPIENT_ADDR=""
 ```
 
 設定した受取アドレスを確認する。
@@ -123,6 +130,7 @@ echo "RECIPIENT_ADDR=$RECIPIENT_ADDR"
 設定した宛先へ送金する。
 
 ```bash
+# 送金量を inj 単位で指定する。この例は 0.001 INJ。
 export AMOUNT="1000000000000000inj"
 export BANK_SEND_GAS=200000
 CONFIRM_SEND=yes bash ./scripts/injectived/bank-send.sh
@@ -230,9 +238,8 @@ check_tx() {
 }
 ```
 
-INJ 送金で返された TxHash を、次の空の二重引用符の間に入力してから実行する。
-
 ```bash
+# INJ 送金で返された TxHash を、次の空の二重引用符の間に入力してから実行する。
 check_tx ""
 ```
 
@@ -251,10 +258,14 @@ check_tx ""
 名称・シンボル・小数桁数を変更する場合は、次の設定値を編集する。新規作成時の小数桁数は [0〜24 の範囲](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/types/denoms.go)で指定する。本書の数量例は `6` 桁を前提としている。
 
 ```bash
+# 必要に応じて、二重引用符の間の値をトークンの名称に変更する。
 export TOKEN_NAME="My Token"
+# 必要に応じて、二重引用符の間の値をトークンのシンボルに変更する。
 export TOKEN_SYMBOL="MTK"
+# 小数桁数を指定する。メタデータ編集時は作成時と同じ値を使う。
 export TOKEN_DECIMALS=6
 export GAS=300000
+# 新規作成時は未使用の名前を指定する。既存トークンの編集では作成時の値を使う。
 export SUBDENOM="mtk"
 export CREATOR_ADDR="$MY_ADDR"
 export DENOM="factory/${CREATOR_ADDR}/${SUBDENOM}"
@@ -262,9 +273,8 @@ source scripts/tokenfactory/load-env.sh
 CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh create-denom
 ```
 
-denom 作成で返された TxHash を、二重引用符の間に入力してから実行する。
-
 ```bash
+# denom 作成で返された TxHash を、二重引用符の間に入力してから実行する。
 check_tx ""
 ```
 
@@ -273,12 +283,19 @@ check_tx ""
 変更したい値を編集し、同じ Bash で設定する。作成済みトークンのメタデータを編集する場合も、この設定と次の `set-metadata` を実行する。denom の作成コマンドを再実行する必要はない。
 
 ```bash
+# 必要に応じて、二重引用符の間の値をトークンの名称に変更する。
 export TOKEN_NAME="My Token"
+# 必要に応じて、二重引用符の間の値をトークンのシンボルに変更する。
 export TOKEN_SYMBOL="MTK"
+# 説明文を入力する。説明を削除する場合は二重引用符の間を空にする。
 export TOKEN_DESCRIPTION="My Token Description"
+# 表示単位を入力する。0 桁の場合は二重引用符の間を $DENOM に変更する。
 export TOKEN_DISPLAY="MTK"
+# 小数桁数を指定する。メタデータ編集時は作成時と同じ値を使う。
 export TOKEN_DECIMALS=6
+# 参照先 URI を指定する場合は二重引用符の間に入力する。使用しない場合は空のままにする。
 export TOKEN_URI=""
+# URI のハッシュを指定する場合は二重引用符の間に入力する。使用しない場合は空のままにする。
 export TOKEN_URI_HASH=""
 ```
 
@@ -340,9 +357,8 @@ set_token_metadata
 
 </details>
 
-メタデータ設定で返された TxHash を、二重引用符の間に入力してから実行する。
-
 ```bash
+# メタデータ設定で返された TxHash を、二重引用符の間に入力してから実行する。
 check_tx ""
 ```
 
@@ -360,12 +376,12 @@ injectived query bank denom-metadata "$DENOM" \
 小数桁数 `6` の場合、`1000000000` は `1000 MTK` に相当する。
 
 ```bash
+# ミント量を最小単位で指定する。必要に応じて MINT_AMOUNT の値を変更する。
 MINT_AMOUNT=1000000000 CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh mint
 ```
 
-MTK のミントで返された TxHash を、二重引用符の間に入力してから実行する。
-
 ```bash
+# MTK のミントで返された TxHash を、二重引用符の間に入力してから実行する。
 check_tx ""
 ```
 
@@ -380,13 +396,13 @@ bash ./setup/normal/07-tokenfactory-mtk.sh balance
 宛先は手順 4 で設定した `RECIPIENT_ADDR` を使う。
 
 ```bash
+# 送金量を最小単位で指定する。必要に応じて値を変更する。
 export SEND_AMOUNT=1000000
 CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh send
 ```
 
-MTK の送金で返された TxHash を、二重引用符の間に入力してから実行する。
-
 ```bash
+# MTK の送金で返された TxHash を、二重引用符の間に入力してから実行する。
 check_tx ""
 ```
 
@@ -549,21 +565,20 @@ CLI の実行確認が表示されたら、内容を確認して `y` を入力�
 
 ### 7.2. 登録結果を確認し、code ID を設定する
 
-WASM 登録で返された TxHash を、二重引用符の間に入力してから実行する。
-
 ```bash
+# WASM 登録で返された TxHash を、二重引用符の間に入力してから実行する。
 check_tx ""
 ```
 
-成功したトランザクションの `events` にある `code_id` を読み取り、次の空の二重引用符の間に入力してから実行する。
-
 ```bash
+# 成功したトランザクションの events にある code_id を読み取り、二重引用符の間に入力してから実行する。
 export CODE_ID=""
 ```
 
 ### 7.3. 初期化メッセージを作成する
 
 ```bash
+# 必要に応じて、名称・シンボル・小数桁数・初期残高を変更する。
 TOKEN_NAME="My Token" TOKEN_SYMBOL="MTK" TOKEN_DECIMALS=6 INITIAL_BALANCE=1000000 OUTPUT_FILE=instantiate_msg.json \
   bash ./scripts/CW20/create-instantiate-msg.sh
 jq . instantiate_msg.json
@@ -584,17 +599,15 @@ injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
   --gas-prices="$GAS_PRICES" --gas="$GAS" --output json -y
 ```
 
-初期化で返された TxHash を、二重引用符の間に入力してから実行する。
-
 ```bash
+# 初期化で返された TxHash を、二重引用符の間に入力してから実行する。
 check_tx ""
 ```
 
 ### 7.5. コントラクトアドレスを設定する
 
-成功したトランザクションの `events` にある `_contract_address` または `contract_address` を読み取り、次の空の二重引用符の間に入力してから実行する。
-
 ```bash
+# 成功したトランザクションの events にある _contract_address または contract_address を読み取り、二重引用符の間に入力してから実行する。
 export CONTRACT_ADDR=""
 ```
 
@@ -612,6 +625,7 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 宛先は手順 4 で設定した `RECIPIENT_ADDR` を使う。
 
 ```bash
+# CW20 の送金量を最小単位で指定する。必要に応じて値を変更する。
 export CW20_SEND_AMOUNT=1000000
 injectived tx wasm execute "$CONTRACT_ADDR" \
   '{"transfer":{"recipient":"'"$RECIPIENT_ADDR"'","amount":"'"$CW20_SEND_AMOUNT"'"}}' \
@@ -620,9 +634,8 @@ injectived tx wasm execute "$CONTRACT_ADDR" \
   --gas-prices "$GAS_PRICES" --gas "$GAS" --output json -y
 ```
 
-CW20 の送金で返された TxHash を、二重引用符の間に入力してから実行する。
-
 ```bash
+# CW20 の送金で返された TxHash を、二重引用符の間に入力してから実行する。
 check_tx ""
 ```
 
@@ -636,6 +649,7 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 初期化メッセージで minter に設定した `KEY_NAME` の鍵で実行する。
 
 ```bash
+# CW20 のミント量を最小単位で指定する。必要に応じて値を変更する。
 export CW20_MINT_AMOUNT=1000000
 injectived tx wasm execute "$CONTRACT_ADDR" \
   '{"mint":{"recipient":"'"$SENDER_ADDR"'","amount":"'"$CW20_MINT_AMOUNT"'"}}' \
@@ -644,9 +658,8 @@ injectived tx wasm execute "$CONTRACT_ADDR" \
   --gas-prices "$GAS_PRICES" --gas "$GAS" --output json -y
 ```
 
-CW20 のミントで返された TxHash を、二重引用符の間に入力してから実行する。
-
 ```bash
+# CW20 のミントで返された TxHash を、二重引用符の間に入力してから実行する。
 check_tx ""
 ```
 
@@ -704,11 +717,12 @@ injectived tx wasm store "$WASM_PATH" \
 #### コントラクトの初期化
 
 コード登録時の TxHash を使って手順 5 の `check_tx` を実行し、結果の `events` から `code_id` を確認する。
-取得した値を、次の `CODE_ID` の空の二重引用符の間に入力し、初期化メッセージを使ってコントラクトを作成する。
+取得した code ID を `CODE_ID` に設定し、初期化メッセージを使ってコントラクトを作成する。
 以下では、コード登録用に設定したガス上限を、初期化・送金・ミントで使う設定例の `300000` に変更する。`source` は既存の `GAS` を保持するため、この変更を明示している。
 
 ```bash
 GAS=300000
+# WASM 登録の結果にある code_id を二重引用符の間に入力してから実行する。
 CODE_ID=""
 source scripts/CW20/load-env.sh
 injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
@@ -726,9 +740,9 @@ injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
 
 初期化の TxHash で結果を確認し、`events` 内の `_contract_address` または `contract_address` の値を `CONTRACT_ADDR` に設定する。
 `CODE_ID` は保存済みコードの番号、`CONTRACT_ADDR` は作成したコントラクトのアドレスであり、別の値である。
-取得したコントラクトアドレスを、次の空の二重引用符の間に入力してから実行する。
 
 ```bash
+# 初期化の結果にあるコントラクトアドレスを二重引用符の間に入力してから実行する。
 CONTRACT_ADDR=""
 source scripts/CW20/load-env.sh
 ```
