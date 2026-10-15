@@ -59,12 +59,6 @@ export RECIPIENT_ADDR="inj1..."
 
 後続の INJ・TokenFactory・CW20 の送金では、この `RECIPIENT_ADDR` を使う。
 
-自分のアドレスを受取先に戻す場合は、次を実行する。
-
-```bash
-export RECIPIENT_ADDR="$MY_ADDR"
-```
-
 <details>
 <summary>補足：環境変数の読み込みとウォレット作成のコマンド</summary>
 
