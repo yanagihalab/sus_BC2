@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -39,7 +40,7 @@ class InjectiveTransactionTests(unittest.TestCase):
         self.configuration = self.directory / "responses.json"
         self.state_file = self.directory / "mock-state.json"
         # Every executable is selected explicitly; there is no host PATH fallback.
-        for command in ("bash", "cat", "dirname", "env", "grep", "jq", "tr"):
+        for command in ("bash", "cat", "chmod", "dirname", "env", "grep", "jq", "mkdir", "mktemp", "tr"):
             executable = shutil.which(command)
             if executable is None:
                 self.fail(f"Required test utility is unavailable: {command}")
@@ -53,9 +54,14 @@ state_path = Path(os.environ["MOCK_STATE"])
 state = json.loads(state_path.read_text()) if state_path.exists() else {"queries": 0, "transactions": []}
 
 def emit(response):
-    output = response.get("output", {})
-    print(output if isinstance(output, str) else json.dumps(output))
-    if response.get("stderr"):
+    if "stdout" in response:
+        sys.stdout.write(response["stdout"])
+    else:
+        output = response.get("output", {})
+        print(output if isinstance(output, str) else json.dumps(output))
+    if "stderr_raw" in response:
+        sys.stderr.write(response["stderr_raw"])
+    elif response.get("stderr"):
         print(response["stderr"], file=sys.stderr)
     sys.exit(response.get("status", 0))
 
@@ -127,11 +133,12 @@ capture_tx_state() {
   jq -nc --arg hash "${TX_HASH-}" --arg result "${TX_RESULT-}" \\
     --arg event "${EVENT_VALUE-}" --arg code_id "${CODE_ID-}" --arg contract "${CONTRACT_ADDR-}" \\
     --arg inj_hash "${INJ_SEND_TX_HASH-}" --arg inj_status "${INJ_SEND_STATUS-}" \\
+    --arg log_dir "${TX_LOG_DIR-}" --arg first_log_dir "${FIRST_TX_LOG_DIR-}" --arg umask "$(umask)" \\
     --arg create_hash "${CREATE_DENOM_TX_HASH-}" --arg metadata_hash "${METADATA_TX_HASH-}" \\
     --arg tf_mint_hash "${TOKENFACTORY_MINT_TX_HASH-}" --arg tf_send_hash "${TOKENFACTORY_SEND_TX_HASH-}" \\
     --arg store_hash "${STORE_TX_HASH-}" --arg instantiate_hash "${INSTANTIATE_TX_HASH-}" \\
     --arg send_hash "${CW20_SEND_TX_HASH-}" --arg mint_hash "${CW20_MINT_TX_HASH-}" \\
-    '{hash:$hash,result:$result,event:$event,code_id:$code_id,contract:$contract,inj_hash:$inj_hash,inj_status:$inj_status,hashes:[$create_hash,$metadata_hash,$tf_mint_hash,$tf_send_hash,$store_hash,$instantiate_hash,$send_hash,$mint_hash]}'
+    '{hash:$hash,result:$result,event:$event,code_id:$code_id,contract:$contract,inj_hash:$inj_hash,inj_status:$inj_status,log_dir:$log_dir,first_log_dir:$first_log_dir,umask:$umask,hashes:[$create_hash,$metadata_hash,$tf_mint_hash,$tf_send_hash,$store_hash,$instantiate_hash,$send_hash,$mint_hash]}'
   exit "$tx_test_status"
 }
 trap capture_tx_state EXIT
@@ -208,6 +215,16 @@ printf '%s\\n' '__PARENT_SHELL_ALIVE__'
         self.assertEqual(state["result"], "", "A failed transaction must not retain an old successful result")
         self.assertEqual(len(self.sends()), sends)
 
+    def assert_private_log_files(self, directory, *prefixes):
+        directory = Path(directory)
+        self.assertTrue(directory.is_dir())
+        self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o700)
+        expected = {f"{prefix}.{suffix}" for prefix in prefixes for suffix in ("stdout", "stderr", "status")}
+        self.assertEqual({path.name for path in directory.iterdir()}, expected)
+        for name in expected:
+            self.assertEqual(stat.S_IMODE((directory / name).stat().st_mode), 0o600, name)
+        return directory
+
     def test_success_sends_once_and_exports_confirmed_result(self):
         result, state = self.run_transaction()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -219,6 +236,185 @@ printf '%s\\n' '__PARENT_SHELL_ALIVE__'
         self.assertEqual(len(self.sends()), 1)
         self.assertEqual(len(self.queries()), 1)
         self.assertEqual(self.sleeps(), [])
+
+    def test_unparseable_submission_keeps_exact_raw_output_without_resending(self):
+        for output in (
+            f'txhash: {HASH}\ncode: 0\nheight: "0"\n',
+            "CLI notice\n" + json.dumps(confirmed(height="0")) + "\n",
+            "", '{"txhash": ',
+            json.dumps(confirmed(height="0")).replace(HASH, HASH[:16] + "\x00" + HASH[16:]),
+        ):
+            with self.subTest(output=output):
+                self.configure(broadcast={"stdout": output, "stderr_raw": "mock warning\n\n"})
+                result, state = self.run_transaction(TX_RESULT="stale")
+                self.assert_failed_without_result(result, state)
+                self.assertEqual(self.queries(), [])
+                directory = self.assert_private_log_files(state["log_dir"], "submission")
+                self.assertEqual((directory / "submission.stdout").read_bytes(), output.encode())
+                self.assertEqual((directory / "submission.stderr").read_text(), "mock warning\n\n")
+                self.assertEqual((directory / "submission.status").read_text().strip(), "0")
+                self.assertIn("mock warning", result.stderr)
+
+    def test_nonzero_submission_saves_both_streams_and_original_cli_status(self):
+        self.configure(broadcast={"stdout": "partial response\n\n", "stderr_raw": "mock transport error\n", "status": 42})
+        result, state = self.run_transaction(TX_RESULT="stale")
+        self.assertEqual(result.returncode, 42)
+        self.assert_failed_without_result(result, state)
+        directory = self.assert_private_log_files(state["log_dir"], "submission")
+        self.assertEqual((directory / "submission.stdout").read_text(), "partial response\n\n")
+        self.assertEqual((directory / "submission.stderr").read_text(), "mock transport error\n")
+        self.assertEqual((directory / "submission.status").read_text().strip(), "42")
+        self.assertIn("mock transport error", result.stderr)
+        self.assertIn("partial response\n\n", result.stderr)
+        self.assertEqual(self.queries(), [])
+
+    def test_log_directories_are_unique_private_and_do_not_change_umask(self):
+        stale = self.directory / "stale-log"
+        stale.mkdir()
+        (stale / "marker").write_text("leave this previous log alone")
+        result, state = self.run_shell(
+            'source "$TX_HELPER"\numask 0000\n'
+            'run_tx injectived tx mock argument-canary --output json --broadcast-mode sync -y || exit $?\n'
+            'FIRST_TX_LOG_DIR="$TX_LOG_DIR"\n'
+            'run_tx injectived tx mock argument-canary --output json --broadcast-mode sync -y || exit $?\n'
+            'bash -uc \'[ -n "$TX_LOG_DIR" ] && [ -d "$TX_LOG_DIR" ]\'',
+            TX_HELPER=str(HELPER), TX_LOG_DIR=str(stale), TX_TEST_PRIVATE_ENV="environment-canary",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(state["umask"], "0000")
+        self.assertNotEqual(state["first_log_dir"], state["log_dir"])
+        expected_root = self.directory / ".local/state/sus_BC2/transactions"
+        for path in (state["first_log_dir"], state["log_dir"]):
+            directory = self.assert_private_log_files(path, "submission", "query-1")
+            self.assertEqual(directory.parent, expected_root)
+            content = "".join(file.read_text() for file in directory.iterdir())
+            self.assertNotIn("argument-canary", content)
+            self.assertNotIn("environment-canary", content)
+        self.assertEqual((stale / "marker").read_text(), "leave this previous log alone")
+        self.assertEqual(len(self.sends()), 2)
+
+    def test_log_parent_uses_xdg_state_home_or_explicit_override(self):
+        xdg = self.directory / "xdg state"
+        explicit = self.directory / "explicit transactions"
+        for environment, expected in (
+            ({"XDG_STATE_HOME": str(xdg)}, xdg / "sus_BC2/transactions"),
+            ({"XDG_STATE_HOME": str(xdg), "TX_LOG_ROOT": str(explicit)}, explicit),
+        ):
+            with self.subTest(environment=environment):
+                self.configure()
+                result, state = self.run_transaction(**environment)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(Path(state["log_dir"]).parent, expected)
+
+    def test_log_creation_failure_sends_nothing_and_clears_stale_log_path(self):
+        blocked = self.directory / "not-a-directory"
+        blocked.write_text("unchanged")
+        stale = self.directory / "old-log"
+        stale.mkdir()
+        result, state = self.run_transaction(TX_LOG_ROOT=str(blocked), TX_LOG_DIR=str(stale), TX_RESULT="stale")
+        self.assert_failed_without_result(result, state, sends=0)
+        self.assertEqual(state["log_dir"], "")
+        self.assertEqual(self.queries(), [])
+        self.assertEqual(list(stale.iterdir()), [])
+        self.assertEqual(blocked.read_text(), "unchanged")
+
+    def test_log_file_permission_failure_stops_before_the_command(self):
+        # Replace the utility symlink itself, never its host executable.
+        (self.binary_directory / "chmod").unlink()
+        self.write_mock("chmod", '''
+if sys.argv[1] == "600":
+    print("mock response-file permission failure", file=sys.stderr)
+    sys.exit(73)
+''')
+        result, state = self.run_transaction(TX_RESULT="stale")
+        self.assertEqual(result.returncode, 73)
+        self.assert_failed_without_result(result, state, sends=0)
+        self.assertEqual(self.queries(), [])
+        directory = self.assert_private_log_files(state["log_dir"], "submission")
+        self.assertTrue(all(file.read_bytes() == b"" for file in directory.iterdir()))
+
+    def test_function_exit_is_logged_without_exiting_the_caller(self):
+        for status in (0, 42):
+            with self.subTest(status=status):
+                self.configure()
+                result, state = self.run_shell(
+                    'source "$TX_HELPER"\n'
+                    'submission_function() {\n'
+                    '  printf \'["function-submit"]\\n\' >> "$MOCK_LOG"\n'
+                    '  printf \'%s\\n\' "$FUNCTION_OUTPUT"\n'
+                    '  printf \'%s\\n\' "function diagnostic" >&2\n'
+                    '  exit "$FUNCTION_STATUS"\n'
+                    '}\n'
+                    'run_tx --hash-var STORE_TX_HASH submission_function\n'
+                    'function_status=$?\n'
+                    'printf \'%s\\n\' "__FUNCTION_CALLER_ALIVE__"\n'
+                    'exit "$function_status"',
+                    TX_HELPER=str(HELPER), FUNCTION_OUTPUT=json.dumps(confirmed(height="0")),
+                    FUNCTION_STATUS=str(status), STORE_TX_HASH=OTHER_HASH, TX_RESULT="stale",
+                )
+                self.assertEqual(result.returncode, status, result.stderr)
+                self.assertIn("__FUNCTION_CALLER_ALIVE__", result.stdout)
+                prefixes = ("submission", "query-1") if status == 0 else ("submission",)
+                directory = self.assert_private_log_files(state["log_dir"], *prefixes)
+                self.assertEqual((directory / "submission.status").read_text().strip(), str(status))
+                self.assertEqual((directory / "submission.stderr").read_text(), "function diagnostic\n")
+                self.assertEqual(self.calls().count(["function-submit"]), 1)
+                self.assertEqual(len(self.queries()), 1 if status == 0 else 0)
+                self.assertEqual(state["hashes"][4], HASH if status == 0 else "")
+                if status:
+                    self.assertEqual(state["result"], "")
+                    self.assertIn(json.dumps(confirmed(height="0")), result.stderr)
+
+    def test_unparseable_query_is_saved_in_the_submission_log_directory(self):
+        output = f'txhash: {HASH}\ncode: 0\nheight: "12"\n'
+        self.configure(queries=[{"stdout": output, "stderr_raw": "mock query warning\n"}])
+        result, state = self.run_transaction(TX_RESULT="stale")
+        self.assert_failed_without_result(result, state)
+        self.assertEqual(state["hash"], HASH)
+        self.assertEqual(len(self.queries()), 1)
+        directory = self.assert_private_log_files(state["log_dir"], "submission", "query-1")
+        self.assertEqual((directory / "query-1.stdout").read_text(), output)
+        self.assertEqual((directory / "query-1.stderr").read_text(), "mock query warning\n")
+        self.assertEqual((directory / "query-1.status").read_text().strip(), "0")
+        self.assertIn("mock query warning", result.stderr)
+
+    def test_documented_raw_log_recovery_queries_saved_hash_without_resending(self):
+        document = (ROOT / "docs/injective-setup.md").read_text()
+        section = re.search(
+            r"^### JSON の解析に失敗した[^\n]*\n(.*?)(?=^### |^## |\Z)",
+            document, flags=re.MULTILINE | re.DOTALL,
+        )
+        self.assertIsNotNone(section)
+        blocks = re.findall(r"^```bash\s*\n(.*?)^```", section.group(1), flags=re.MULTILINE | re.DOTALL)
+        self.assertEqual(len(blocks), 5)
+        recovery = blocks[4].replace(
+            'RECOVERY_TX_HASH="今回の取引の64桁のTxHash"', 'RECOVERY_TX_HASH="$RECOVERED_HASH"',
+        )
+        self.assertNotIn("今回の取引の64桁のTxHash", recovery)
+        output = f'txhash: {HASH}\ncode: 0\nheight: "0"\n'
+        self.configure(broadcast={"stdout": output, "stderr_raw": "mock submission warning\n"})
+        workspace, _ = self.transaction_workspace()
+        result, state = self.run_shell(
+            'source "$TX_HELPER"\nrun_tx injectived tx mock\n'
+            'initial_status=$?\n[ "$initial_status" -ne 0 ] || exit 99\n'
+            'FIRST_TX_LOG_DIR="$TX_LOG_DIR"\n'
+            + blocks[1]
+            + 'IFS= read -r recovery_line < "$FIRST_TX_LOG_DIR/submission.stdout"\n'
+            'RECOVERED_HASH="${recovery_line#txhash: }"\n'
+            + recovery,
+            cwd=workspace, TX_HELPER=str(HELPER), TX_RESULT="stale",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(output, result.stdout)
+        self.assertIn("mock submission warning", result.stdout)
+        self.assertEqual(state["hash"], HASH)
+        self.assertTrue(state["result"])
+        self.assertNotEqual(state["first_log_dir"], state["log_dir"])
+        original = self.assert_private_log_files(state["first_log_dir"], "submission")
+        self.assertEqual((original / "submission.stdout").read_text(), output)
+        self.assert_private_log_files(state["log_dir"], "query-1")
+        self.assertEqual(len(self.sends()), 1)
+        self.assertEqual([call[2] for call in self.queries()], [HASH])
 
     def test_wrapped_broadcast_and_query_responses_are_supported(self):
         self.configure(
@@ -290,6 +486,10 @@ printf '%s\\n' '__PARENT_SHELL_ALIVE__'
         self.assertEqual(len(self.sends()), 1)
         self.assertEqual(len(self.queries()), 2)
         self.assertEqual(self.sleeps(), [["sleep", "2"]])
+        directory = self.assert_private_log_files(state["log_dir"], "submission", "query-1", "query-2")
+        self.assertEqual((directory / "query-1.status").read_text().strip(), "1")
+        self.assertEqual((directory / "query-1.stderr").read_text(), "transaction not found\n")
+        self.assertEqual((directory / "query-2.status").read_text().strip(), "0")
 
     def test_nonzero_broadcast_code_stops_before_query(self):
         self.configure(broadcast={"output": confirmed(code=5, height="0", raw_log="rejected")})
@@ -540,7 +740,9 @@ printf '%s\\n' '__PARENT_SHELL_ALIVE__'
         )
         self.assert_failed_without_result(result, state, sends=0)
         self.assertEqual(state["inj_hash"], "")
-        self.assertIn("CONFIRM_SEND=yes", result.stdout + result.stderr)
+        directory = self.assert_private_log_files(state["log_dir"], "submission")
+        self.assertIn("CONFIRM_SEND=yes", (directory / "submission.stdout").read_text())
+        self.assertIn("CONFIRM_SEND=yes", result.stderr)
         self.assertEqual(self.calls(), [])
 
     def test_store_uses_json_sync_and_automatic_cli_confirmation(self):

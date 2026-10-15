@@ -1,6 +1,6 @@
 # sus_BC2
 
-`injectived` の接続設定・CLI 操作については、[docs/injective-setup.md](docs/injective-setup.md) を参照する。
+`injectived` の接続設定・CLI 操作・応答ログの確認については、[docs/injective-setup.md](docs/injective-setup.md) を参照する。
 
 ## 実行手順
 

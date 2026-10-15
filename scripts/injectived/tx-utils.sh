@@ -12,12 +12,88 @@ fi
 
 _injective_tx_tools() {
   local tool
-  for tool in jq injectived; do
+  for tool in jq injectived mkdir mktemp chmod cat; do
     if ! command -v "$tool" >/dev/null 2>&1; then
       printf 'Required command not found: %s\n' "$tool" >&2
       return 127
     fi
   done
+}
+
+_injective_tx_log_start() {
+  local root directory status
+  if [ -n "${TX_LOG_ROOT:-}" ]; then
+    root="$TX_LOG_ROOT"
+  elif [ -n "${XDG_STATE_HOME:-}" ]; then
+    root="$XDG_STATE_HOME/sus_BC2/transactions"
+  elif [ -n "${HOME:-}" ]; then
+    root="$HOME/.local/state/sus_BC2/transactions"
+  else
+    echo "Set HOME, XDG_STATE_HOME, or TX_LOG_ROOT before recording transaction responses." >&2
+    return 2
+  fi
+  case "$root" in /*) ;; *) root="$PWD/$root" ;; esac
+  if directory="$(
+    umask 077
+    mkdir -p "$root" &&
+    root="$(cd "$root" && pwd -P)" &&
+    mktemp -d "$root/transaction.XXXXXXXXXX"
+  )"; then :; else
+    status=$?
+    echo "Cannot create response log directory. No transaction command was executed." >&2
+    return "$status"
+  fi
+  if chmod 700 "$directory"; then :; else
+    status=$?
+    echo "Cannot secure response log directory. No transaction command was executed." >&2
+    return "$status"
+  fi
+  export TX_LOG_DIR="$directory" || return "$?"
+  printf 'Transaction response logs: TX_LOG_DIR=%s\n' "$TX_LOG_DIR" >&2
+}
+
+# Run in a subshell, preserving the caller's umask and isolating command functions.
+# On success stdout contains only the CLI status; a nonzero return is a log failure.
+_injective_tx_capture() (
+  local directory="$1" prefix="$2" status log_status extension command_umask
+  shift 2
+  command_umask="$(umask)"
+  umask 077
+  for extension in stdout stderr status; do
+    if : > "$directory/$prefix.$extension"; then :; else
+      status=$?
+      echo "Cannot prepare response log files. No command was executed." >&2
+      return "$status"
+    fi
+  done
+  if chmod 600 "$directory/$prefix.stdout" "$directory/$prefix.stderr" "$directory/$prefix.status"; then :; else
+    status=$?
+    echo "Cannot secure response log files. No command was executed." >&2
+    return "$status"
+  fi
+  if (umask "$command_umask" && "$@") > "$directory/$prefix.stdout" 2> "$directory/$prefix.stderr"; then
+    status=0
+  else
+    status=$?
+  fi
+  if printf '%s\n' "$status" > "$directory/$prefix.status"; then
+    log_status=0
+  else
+    log_status=$?
+    echo "Cannot record the command exit status. The transaction state may be unknown." >&2
+  fi
+  if cat "$directory/$prefix.stderr" >&2; then :; else
+    echo "Cannot replay command stderr; inspect its response log directly." >&2
+  fi
+  if [ "$log_status" -ne 0 ]; then
+    if [ "$status" -ne 0 ]; then return "$status"; fi
+    return "$log_status"
+  fi
+  printf '%s\n' "$status"
+)
+
+_injective_tx_log_notice() {
+  printf 'Transaction state may be unknown. Inspect response logs in %s. Do not resend; confirm the transaction state first.\n' "$TX_LOG_DIR" >&2
 }
 
 _injective_tx_config() {
@@ -53,8 +129,8 @@ _injective_tx_uint() {
 }
 
 run_tx() {
-  local response body hash code status hash_var=""
-  unset TX_HASH TX_RESULT || return "$?"
+  local response body hash code status command_status hash_var=""
+  unset TX_HASH TX_RESULT TX_LOG_DIR || return "$?"
   if [ "${1-}" = "--hash-var" ]; then
     if [ "$#" -lt 2 ]; then
       echo "--hash-var requires an operation hash variable name." >&2
@@ -74,24 +150,38 @@ run_tx() {
   fi
   _injective_tx_tools || return "$?"
   _injective_tx_config || return "$?"
+  _injective_tx_log_start || return "$?"
 
-  # Capture only this one send. Polling below never invokes the send command.
-  if response="$("$@")"; then
-    :
-  else
+  # Save the one send response verbatim before reading or parsing any of it.
+  if command_status="$(_injective_tx_capture "$TX_LOG_DIR" submission "$@")"; then :; else
     status=$?
-    [ -z "$response" ] || printf '%s\n' "$response" >&2
-    printf 'Transaction command failed (exit %s).\n' "$status" >&2
+    _injective_tx_log_notice
     return "$status"
   fi
-  if body="$(_injective_tx_body <<< "$response")"; then :; else
+  if [ "$command_status" -ne 0 ]; then
+    if cat "$TX_LOG_DIR/submission.stdout" >&2; then :; else
+      echo "Cannot replay command stdout; inspect its response log directly." >&2
+    fi
+    printf 'Transaction command failed (exit %s); submission may already have occurred.\n' "$command_status" >&2
+    _injective_tx_log_notice
+    return "$command_status"
+  fi
+  if body="$(_injective_tx_body < "$TX_LOG_DIR/submission.stdout")"; then :; else
     status=$?
     echo "Invalid transaction submission JSON." >&2
+    _injective_tx_log_notice
+    return "$status"
+  fi
+  if response="$(cat "$TX_LOG_DIR/submission.stdout")"; then :; else
+    status=$?
+    echo "Cannot read the recorded transaction submission response." >&2
+    _injective_tx_log_notice
     return "$status"
   fi
   if hash="$(_injective_tx_hash <<< "$body")"; then :; else
     status=$?
     echo "Transaction submission is missing a valid txhash." >&2
+    _injective_tx_log_notice
     return "$status"
   fi
   export TX_HASH="$hash" || return "$?"
@@ -99,14 +189,16 @@ run_tx() {
   if code="$(_injective_tx_uint code <<< "$body")"; then :; else
     status=$?
     echo "Transaction submission is missing a valid code." >&2
+    _injective_tx_log_notice
     return "$status"
   fi
   if [[ ! "$code" =~ ^0+$ ]]; then
     printf 'Transaction was rejected during submission (code %s, TX_HASH=%s).\n' "$code" "$TX_HASH" >&2
     printf '%s\n' "$response" >&2
+    _injective_tx_log_notice
     return 1
   fi
-  if wait_tx "$TX_HASH"; then
+  if _injective_tx_wait "$TX_HASH"; then
     if [ -n "$hash_var" ]; then
       export "$hash_var=$TX_HASH" || return "$?"
     fi
@@ -116,53 +208,75 @@ run_tx() {
 }
 
 wait_tx() {
-  local hash="${1-}" response body result_hash code height status
-  local attempt=1 max_attempts="${TX_MAX_ATTEMPTS:-30}" delay="${TX_RETRY_DELAY:-2}"
-  local last_status=0
-  unset TX_HASH TX_RESULT || return "$?"
+  local hash="${1-}"
+  unset TX_HASH TX_RESULT TX_LOG_DIR || return "$?"
   if [ "$#" -ne 1 ] || [[ ! "$hash" =~ ^[A-Fa-f0-9]{64}$ ]]; then
     echo "Usage: wait_tx <64-character hexadecimal transaction hash>" >&2
     return 2
   fi
   _injective_tx_tools || return "$?"
   _injective_tx_config || return "$?"
+  _injective_tx_log_start || return "$?"
   export TX_HASH="$hash" || return "$?"
+  _injective_tx_wait "$hash"
+}
 
+_injective_tx_wait() {
+  local hash="$1" response body result_hash code height status command_status
+  local attempt=1 max_attempts="${TX_MAX_ATTEMPTS:-30}" delay="${TX_RETRY_DELAY:-2}"
+  local last_status=0
   while [ "$attempt" -le "$max_attempts" ]; do
-    if response="$(injectived q tx "$hash" \
+    if command_status="$(_injective_tx_capture "$TX_LOG_DIR" "query-$attempt" injectived q tx "$hash" \
       --chain-id="${CHAIN_ID:-injective-888}" \
       --node="${NODE:-https://injective-testnet-rpc.publicnode.com:443}" \
-      --output json)"; then
+      --output json)"; then :; else
+      status=$?
+      _injective_tx_log_notice
+      return "$status"
+    fi
+    if [ "$command_status" -eq 0 ]; then
       last_status=0
-      if body="$(_injective_tx_body <<< "$response")"; then :; else
+      if body="$(_injective_tx_body < "$TX_LOG_DIR/query-$attempt.stdout")"; then :; else
         status=$?
         echo "Invalid transaction query JSON." >&2
+        _injective_tx_log_notice
+        return "$status"
+      fi
+      if response="$(cat "$TX_LOG_DIR/query-$attempt.stdout")"; then :; else
+        status=$?
+        echo "Cannot read the recorded transaction query response." >&2
+        _injective_tx_log_notice
         return "$status"
       fi
       if result_hash="$(_injective_tx_hash <<< "$body")"; then :; else
         status=$?
         echo "Transaction query is missing a valid txhash." >&2
+        _injective_tx_log_notice
         return "$status"
       fi
       if jq -e --arg expected "$hash" \
         'ascii_downcase == ($expected | ascii_downcase)' <<< "\"$result_hash\"" >/dev/null; then :; else
         status=$?
         echo "Transaction query returned a different txhash." >&2
+        _injective_tx_log_notice
         return "$status"
       fi
       if code="$(_injective_tx_uint code <<< "$body")"; then :; else
         status=$?
         echo "Transaction query is missing a valid code." >&2
+        _injective_tx_log_notice
         return "$status"
       fi
       if height="$(_injective_tx_uint height <<< "$body")"; then :; else
         status=$?
         echo "Transaction query is missing a valid height." >&2
+        _injective_tx_log_notice
         return "$status"
       fi
       if [[ ! "$code" =~ ^0+$ ]]; then
         printf 'Transaction failed on chain (code %s, TX_HASH=%s).\n' "$code" "$TX_HASH" >&2
         printf '%s\n' "$response" >&2
+        _injective_tx_log_notice
         return 1
       fi
       if [[ ! "$height" =~ ^0+$ ]]; then
@@ -171,7 +285,7 @@ wait_tx() {
         return 0
       fi
     else
-      last_status=$?
+      last_status="$command_status"
     fi
     if [ "$attempt" -lt "$max_attempts" ]; then
       sleep "$delay" || return "$?"
@@ -179,6 +293,7 @@ wait_tx() {
     attempt=$((attempt + 1))
   done
   printf 'Transaction confirmation timed out after %s attempts (TX_HASH=%s). Use wait_tx "$TX_HASH" to query again.\n' "$max_attempts" "$TX_HASH" >&2
+  _injective_tx_log_notice
   if [ "$last_status" -ne 0 ]; then
     return "$last_status"
   fi
