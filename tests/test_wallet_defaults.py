@@ -25,12 +25,13 @@ class WalletRecipientDefaultsTests(unittest.TestCase):
         self.log = self.directory / "calls.jsonl"
         self.binary_directory = self.directory / "bin"
         self.no_cli_directory = self.directory / "no-cli"
-        cat = shutil.which("cat")
-        if cat is None:
-            self.fail("Required test utility is unavailable: cat")
         for directory in (self.binary_directory, self.no_cli_directory):
             directory.mkdir()
-            (directory / "cat").symlink_to(cat)
+            for command in ("cat", "dirname"):
+                executable = shutil.which(command)
+                if executable is None:
+                    self.fail(f"Required test utility is unavailable: {command}")
+                (directory / command).symlink_to(executable)
         # PATH never falls back to the host, including when no mock CLI exists.
         mock = self.binary_directory / "injectived"
         mock.write_text(f"#!{sys.executable}\n" + '''

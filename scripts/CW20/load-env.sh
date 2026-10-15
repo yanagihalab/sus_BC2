@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+if [ -z "${BASH_VERSION:-}" ]; then
+  echo "Load scripts/CW20/load-env.sh in Bash. Run bash first, then source this file." >&2
+  return 1 2>/dev/null || exit 1
+fi
+
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   cat <<'EOF'
 This script must be sourced so the environment variables remain in the current shell.
@@ -9,6 +14,8 @@ Usage:
 EOF
   exit 1
 fi
+
+source "$(dirname "${BASH_SOURCE[0]}")/../injectived/tx-utils.sh" || return
 
 export KEY_NAME="${KEY_NAME:-testwallet}"
 export CHAIN_ID="${CHAIN_ID:-injective-888}"

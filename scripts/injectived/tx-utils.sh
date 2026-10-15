@@ -48,10 +48,23 @@ _injective_tx_uint() {
 }
 
 run_tx() {
-  local response body hash code status
+  local response body hash code status hash_var=""
   unset TX_HASH TX_RESULT || return "$?"
+  if [ "${1-}" = "--hash-var" ]; then
+    if [ "$#" -lt 2 ]; then
+      echo "--hash-var requires an operation hash variable name." >&2
+      return 2
+    fi
+    hash_var="$2"
+    if [[ ! "$hash_var" =~ ^[A-Z][A-Z0-9_]*_TX_HASH$ ]]; then
+      echo "--hash-var must name an uppercase operation variable ending in _TX_HASH." >&2
+      return 2
+    fi
+    shift 2
+    unset "$hash_var" || return "$?"
+  fi
   if [ "$#" -eq 0 ]; then
-    echo "Usage: run_tx <transaction command...>" >&2
+    echo "Usage: run_tx [--hash-var OPERATION_TX_HASH] <transaction command...>" >&2
     return 2
   fi
   _injective_tx_tools || return "$?"
@@ -87,7 +100,13 @@ run_tx() {
     printf '%s\n' "$response" >&2
     return 1
   fi
-  wait_tx "$TX_HASH"
+  if wait_tx "$TX_HASH"; then
+    if [ -n "$hash_var" ]; then
+      export "$hash_var=$TX_HASH" || return "$?"
+    fi
+  else
+    return "$?"
+  fi
 }
 
 wait_tx() {

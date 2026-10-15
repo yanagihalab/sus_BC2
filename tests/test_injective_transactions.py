@@ -148,6 +148,27 @@ trap capture_tx_state EXIT
     def run_transaction(self, **environment):
         return self.run_shell('source "$TX_HELPER"\nrun_tx injectived tx mock --output json --broadcast-mode sync -y', TX_HELPER=str(HELPER), **environment)
 
+    def document_main_program(self, heading):
+        document = (ROOT / "docs/injective-setup.md").read_text()
+        document = re.sub(r"<details>.*?</details>", "", document, flags=re.DOTALL)
+        section = re.search(
+            rf"^{re.escape(heading)}[^\n]*\n(.*?)(?=^### |^## |\Z)",
+            document, flags=re.MULTILINE | re.DOTALL,
+        )
+        self.assertIsNotNone(section, f"Expected documented section: {heading}")
+        blocks = re.findall(r"^```bash\s*\n(.*?)^```", section.group(1), flags=re.MULTILINE | re.DOTALL)
+        self.assertTrue(blocks, f"Expected documented commands: {heading}")
+        return "\n".join(blocks)
+
+    def transaction_workspace(self):
+        workspace = self.directory / "workspace"
+        workspace.mkdir()
+        (workspace / "scripts").symlink_to(ROOT / "scripts", target_is_directory=True)
+        (workspace / "setup").symlink_to(ROOT / "setup", target_is_directory=True)
+        wasm = self.directory / "sample.wasm"
+        wasm.write_bytes(b"mock wasm")
+        return workspace, wasm
+
     def calls(self):
         return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
 
@@ -195,6 +216,46 @@ trap capture_tx_state EXIT
             TX_HELPER=str(HELPER), EXPECTED_HASH=HASH,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_hash_var_is_exported_only_after_confirmation(self):
+        result, state = self.run_shell(
+            'source "$TX_HELPER"\n'
+            'run_tx --hash-var STORE_TX_HASH injectived tx mock || exit $?\n'
+            'bash -uc \'[ "$STORE_TX_HASH" = "$EXPECTED_HASH" ]\'',
+            TX_HELPER=str(HELPER), EXPECTED_HASH=HASH, STORE_TX_HASH=OTHER_HASH,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(state["hashes"][4], HASH)
+        self.assertEqual(len(self.sends()), 1)
+        self.assertEqual(len(self.queries()), 1)
+
+    def test_hash_var_is_cleared_on_broadcast_delivery_and_timeout_failure(self):
+        for configuration in (
+            {"broadcast": {"output": "", "status": 42}},
+            {"broadcast": {"output": confirmed(code=5, height="0")}},
+            {"queries": [{"output": confirmed(code=9)}]},
+            {"queries": [{"output": "", "status": 1}]},
+        ):
+            with self.subTest(configuration=configuration):
+                self.configure(**configuration)
+                result, state = self.run_shell(
+                    'source "$TX_HELPER"\nrun_tx --hash-var STORE_TX_HASH injectived tx mock',
+                    TX_HELPER=str(HELPER), TX_MAX_ATTEMPTS="2", TX_RETRY_DELAY="0",
+                    STORE_TX_HASH=OTHER_HASH, TX_HASH=OTHER_HASH, TX_RESULT="stale",
+                )
+                self.assert_failed_without_result(result, state)
+                self.assertEqual(state["hashes"][4], "")
+
+    def test_invalid_hash_var_names_do_not_submit_a_transaction(self):
+        for name in ("TX_HASH", "store_tx_hash", "-bad", "STORE_TX_HASH;bad"):
+            with self.subTest(name=name):
+                self.configure()
+                result, state = self.run_shell(
+                    'source "$TX_HELPER"\nrun_tx --hash-var "$INVALID_NAME" injectived tx mock',
+                    TX_HELPER=str(HELPER), INVALID_NAME=name, TX_RESULT="stale",
+                )
+                self.assert_failed_without_result(result, state, sends=0)
+                self.assertEqual(self.queries(), [])
 
     def test_pending_query_then_confirmation_never_resubmits(self):
         self.configure(queries=[
@@ -406,21 +467,86 @@ trap capture_tx_state EXIT
         self.assertEqual(len(self.sends()), 1)
         self.assertEqual(self.sends()[0][-5:], ["--output", "json", "--broadcast-mode", "sync", "-y"])
 
+    def test_documented_cw20_store_loads_transaction_functions_in_fresh_bash(self):
+        workspace, wasm = self.transaction_workspace()
+        self.configure(flow=True)
+        program = self.document_main_program("### 7.1.") + self.document_main_program("### 7.2.")
+        result, state = self.run_shell(
+            program, cwd=workspace, MY_ADDR=ADDRESS, RECIPIENT_ADDR=RECIPIENT,
+            WASM_PATH=str(wasm), STORE_TX_HASH=OTHER_HASH, TX_HASH=OTHER_HASH,
+            TX_RESULT="stale", CODE_ID="999", CONTRACT_ADDR="inj1oldcontract",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(state["hashes"][4], f"{1:064X}")
+        self.assertEqual(state["hash"], f"{1:064X}")
+        self.assertEqual(state["code_id"], "73")
+        self.assertEqual(state["contract"], "")
+        self.assertEqual(len(self.sends()), 1)
+        self.assertEqual(len(self.queries()), 1)
+
+    def test_missing_run_tx_cannot_preserve_or_export_an_old_store_hash(self):
+        workspace, wasm = self.transaction_workspace()
+        program, inserted = re.subn(
+            r"^run_tx ", "unset -f run_tx\nrun_tx ",
+            self.document_main_program("### 7.1."), flags=re.MULTILINE,
+        )
+        self.assertEqual(inserted, 1, "Expected one store command in step 7.1")
+        result, state = self.run_shell(
+            program, cwd=workspace, MY_ADDR=ADDRESS, WASM_PATH=str(wasm),
+            STORE_TX_HASH=OTHER_HASH, TX_HASH=OTHER_HASH, TX_RESULT="stale",
+            CODE_ID="999", CONTRACT_ADDR="inj1oldcontract",
+        )
+        self.assertEqual(result.returncode, 127)
+        self.assert_failed_without_result(result, state, sends=0)
+        self.assertEqual(state["hashes"][4], "")
+        self.assertEqual(state["hash"], "")
+        self.assertEqual(state["code_id"], "")
+        self.assertEqual(state["contract"], "")
+        self.assertEqual(self.queries(), [])
+
+    def test_store_timeout_recovers_with_wait_only_in_the_same_session(self):
+        wasm = self.directory / "sample.wasm"
+        wasm.write_bytes(b"mock wasm")
+        self.configure(queries=[
+            {"output": "", "status": 1}, {"output": "", "status": 1},
+            {"output": confirmed(events=[event("store_code", "code_id", "73")])},
+        ])
+        result, state = self.run_shell(
+            'source "$CW20_LOADER" || exit $?\n'
+            'run_tx --hash-var STORE_TX_HASH env CONFIRM_TX=yes bash "$STORE_SCRIPT"\n'
+            'first_status=$?\n'
+            '[ "$first_status" -ne 0 ] || exit 99\n'
+            '[ -z "${STORE_TX_HASH-}" ] || exit 98\n'
+            'wait_tx "$TX_HASH" || exit $?\n'
+            'CODE_ID="$(tx_event_value store_code code_id)" || exit $?\n'
+            'export CODE_ID STORE_TX_HASH="$TX_HASH"',
+            CW20_LOADER=str(ROOT / "scripts/CW20/load-env.sh"),
+            STORE_SCRIPT=str(ROOT / "setup/normal/11-store-cw20-code.sh"),
+            SENDER_ADDR=ADDRESS, WASM_PATH=str(wasm),
+            TX_MAX_ATTEMPTS="2", TX_RETRY_DELAY="0", STORE_TX_HASH=OTHER_HASH,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(state["hashes"][4], HASH)
+        self.assertEqual(state["code_id"], "73")
+        self.assertEqual(len(self.sends()), 1)
+        self.assertEqual(len(self.queries()), 3)
+        self.assertEqual(self.sleeps(), [["sleep", "0"]])
+
     def test_documented_tokenfactory_and_cw20_main_blocks_run_in_order(self):
         document = (ROOT / "docs/injective-setup.md").read_text()
         document = re.sub(r"<details>.*?</details>", "", document, flags=re.DOTALL)
-        section = document[document.index("## 6."):]
+        sections = re.findall(
+            r"^## [67]\.[^\n]*\n(.*?)(?=^## |\Z)",
+            document, flags=re.MULTILINE | re.DOTALL,
+        )
+        self.assertEqual(len(sections), 2, "Expected the two transaction walkthrough sections")
+        section = "\n".join(sections)
         blocks = re.findall(r"^```bash\s*\n(.*?)^```", section, flags=re.MULTILINE | re.DOTALL)
         self.assertTrue(blocks)
         program = "\n".join(blocks)
         for placeholder in ("取得したcode_id", "取得したcontract_address", "返されたTxHash"):
             self.assertNotIn(placeholder, program)
-        workspace = self.directory / "workspace"
-        workspace.mkdir()
-        (workspace / "scripts").symlink_to(ROOT / "scripts", target_is_directory=True)
-        (workspace / "setup").symlink_to(ROOT / "setup", target_is_directory=True)
-        wasm = self.directory / "sample.wasm"
-        wasm.write_bytes(b"mock wasm")
+        workspace, wasm = self.transaction_workspace()
         self.configure(flow=True)
         result, state = self.run_shell(
             program, cwd=workspace, MY_ADDR=ADDRESS, ADDR=ADDRESS, RECIPIENT_ADDR=RECIPIENT,
