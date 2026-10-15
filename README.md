@@ -51,11 +51,11 @@ cd sus_BC2
 
 ### 3. 環境構築スクリプトを実行する
 
-リポジトリルートで、次のコマンドを実行する。
+リポジトリルートで、次のコマンドを実行する。先頭の `bash` を指定し、一括セットアップスクリプトを Bash で実行する。
 
 ```bash
 cd ~/temp/sus_BC2
-./setup/normal/wsl-kali-experiment-env.sh
+bash ./setup/normal/wsl-kali-experiment-env.sh
 ```
 
 このスクリプトを実行すると、標準設定ではリポジトリルートに `venv` という名前の Python 仮想環境（`~/temp/sus_BC2/venv/`）が作成され、必要なライブラリがインストールされる。
@@ -433,7 +433,7 @@ ls -lh artifacts/checksums.txt
 
 ```bash
 cd ~/temp/sus_BC2
-SETUP_SSH=yes ./setup/normal/wsl-kali-experiment-env.sh
+SETUP_SSH=yes bash ./setup/normal/wsl-kali-experiment-env.sh
 ```
 
 この指定により、`00-install-kali-packages.sh` で `openssh-server` を導入し、その後 `02-setup-vscode-ssh.sh` で設定する。
@@ -596,7 +596,7 @@ pip install -r requirements.txt
 
 ```bash
 cd ~/temp/sus_BC2
-RESET_NODE_MODULES=yes ./setup/normal/wsl-kali-experiment-env.sh
+RESET_NODE_MODULES=yes bash ./setup/normal/wsl-kali-experiment-env.sh
 ```
 
 ### `*__*` のエラーが出る
