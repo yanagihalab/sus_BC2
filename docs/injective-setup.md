@@ -152,6 +152,18 @@ declare -F run_tx wait_tx tx_event_value
 
 `BASH_VERSION` にバージョン番号、`jq` と `injectived` の実行パス、3つの関数名が表示されることを確認する。`BASH_VERSION` が未設定の場合は手順 1 の `bash` を実行し、同じ確認をやり直す。エラーが表示された場合は送金へ進まない。
 
+送金をやり直す前に、保存済みの TxHash と終了コードを確認する。このコマンドは値を表示するだけで、送金や変数の変更は行わない。
+
+```bash
+printf 'INJ_SEND_TX_HASH=%s\nTX_HASH=%s\nINJ_SEND_STATUS=%s\n' \
+  "${INJ_SEND_TX_HASH:-未設定}" \
+  "${TX_HASH:-未設定}" \
+  "${INJ_SEND_STATUS:-未設定}"
+```
+
+`INJ_SEND_TX_HASH` が残っている場合は、再送する前に手順 5 で結果を確認する。`TX_HASH` だけが残っている場合は、今回の INJ 送金に対応する値か確認し、[確定待ちの再開手順](#送信後に確定待ちがタイムアウトした)で照会する。`TX_HASH` は別の取引の値である場合もある。
+`未設定` は現在のシェルに値がないことを示し、未送信であることを保証しない。
+
 受取アドレスと上記の確認結果に問題がなければ、送金する。
 
 ```bash
@@ -817,6 +829,7 @@ cd ~/temp/sus_BC2
 ```
 
 これは取引を送信せず、鍵も作成・変更しない。閉じる直前の操作が送信済みか不明な場合は、送金ブロックを繰り返さず、表示・記録された今回の TxHash を照会する。
+保存済みの値が残っているかは、[手順 4 の TxHash 確認コマンド](#4-injを送金する)で確認する。変数を消したり送金をやり直したりする前に実行する。
 WSL 自体が停止したかは、この症状だけでは判断できない。Windows の PowerShell で次を実行すると、ディストリビューションの状態を確認できる（[Microsoft のコマンド一覧](https://learn.microsoft.com/en-us/windows/wsl/basic-commands#list-installed-linux-distributions)）。
 
 ```powershell
