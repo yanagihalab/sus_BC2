@@ -98,7 +98,7 @@ else:
     def run_document_wallet_block(self, *, existing_wallet=False, **environment):
         document = (ROOT / "docs/injective-setup.md").read_text()
         section = re.search(
-            r"^## 2\..*?\n(.*?)(?=^### 2\.1\.|^## |\Z)",
+            r"^## 2\..*?\n(.*?)(?=^<details>|^## |\Z)",
             document, flags=re.MULTILINE | re.DOTALL,
         )
         self.assertIsNotNone(section, "Expected the documented wallet creation section")

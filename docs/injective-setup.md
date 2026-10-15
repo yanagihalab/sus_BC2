@@ -49,16 +49,6 @@ printf '送信元: %s\n受取先: %s\n' "$MY_ADDR" "$RECIPIENT_ADDR"
 `MY_ADDR` と `ADDR` は自分のアドレス、`RECIPIENT_ADDR` は送金先である。初期設定では同じアドレスを使う。
 作成された鍵を使って、後続の送金・トークン作成・コントラクト操作を行う。新しいターミナルを開いた場合は、手順 1・2 を実行し直す。
 
-### 2.1. 受取アドレスを設定する
-
-手順 2 が成功した同じ Bash セッションで実行する。初期設定の受取先は自分のアドレスである。別のアドレスへ送金する場合は、`inj1...` を実際の受取アドレスに置き換えて設定する。
-
-```bash
-export RECIPIENT_ADDR="inj1..."
-```
-
-後続の INJ・TokenFactory・CW20 の送金では、この `RECIPIENT_ADDR` を使う。
-
 <details>
 <summary>補足：環境変数の読み込みとウォレット作成のコマンド</summary>
 
@@ -132,6 +122,8 @@ export RECIPIENT_ADDR="inj1..."
 ```bash
 echo "RECIPIENT_ADDR=$RECIPIENT_ADDR"
 ```
+
+後続の INJ・TokenFactory・CW20 の送金では、この `RECIPIENT_ADDR` を使う。
 
 設定した宛先へ送金する。
 
@@ -332,7 +324,7 @@ bash ./setup/normal/07-tokenfactory-mtk.sh balance
 
 ### 6.5. MTK を送金し、受取先の残高を確認する
 
-初期設定では自分のウォレットへ送金する。宛先は手順 2 で設定した `RECIPIENT_ADDR` を使う。
+宛先は手順 4 で設定した `RECIPIENT_ADDR` を使う。
 
 ```bash
 export SEND_AMOUNT=1000000
@@ -548,7 +540,7 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 
 ### 7.7. CW20 トークンを送金する
 
-初期設定では自分のウォレットへ送金する。宛先は手順 2 で設定した `RECIPIENT_ADDR` を使う。
+宛先は手順 4 で設定した `RECIPIENT_ADDR` を使う。
 
 ```bash
 export CW20_SEND_AMOUNT=1000000
