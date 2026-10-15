@@ -121,6 +121,7 @@ injectived query bank balances "$MY_ADDR" \
 
 ## 4. INJを送金する
 
+手順 1〜3 を済ませた同じ Bash で実行する。以下は新たに送金する場合の手順であり、確定成功を確認した取引は再送しない。
 初期設定の宛先は自分の `MY_ADDR` である。この手順では別の宛先へ `0.001 INJ` を送金するため、`inj1...` を実際の受取アドレスに置き換えて `RECIPIENT_ADDR` に設定する。
 
 ```bash
@@ -133,43 +134,12 @@ export RECIPIENT_ADDR="inj1..."
 echo "RECIPIENT_ADDR=$RECIPIENT_ADDR"
 ```
 
-続けて、対話シェルの設定を戻す。
+送金量とガス上限を設定し、送金を1回実行する。
 
 ```bash
 set +e +u
 set +o pipefail
-```
-
-同じ Bash で、必要なコマンドと取引関数の読み込みを確認する。この確認では送金しない。
-
-```bash
 cd ~/temp/sus_BC2
-printf 'BASH_VERSION=%s\n' "${BASH_VERSION:-未設定}"
-command -v jq injectived
-source scripts/injectived/tx-utils.sh
-declare -F run_tx wait_tx tx_event_value
-```
-
-`BASH_VERSION` にバージョン番号、`jq` と `injectived` の実行パス、3つの関数名が表示されることを確認する。`BASH_VERSION` が未設定の場合は手順 1 の `bash` を実行し、同じ確認をやり直す。エラーが表示された場合は送金へ進まない。
-
-送金をやり直す前に、保存済みの TxHash と終了コードを確認する。このコマンドは値を表示するだけで、送金や変数の変更は行わない。
-
-```bash
-printf 'INJ_SEND_TX_HASH=%s\nTX_HASH=%s\nINJ_SEND_STATUS=%s\n' \
-  "${INJ_SEND_TX_HASH:-未設定}" \
-  "${TX_HASH:-未設定}" \
-  "${INJ_SEND_STATUS:-未設定}"
-```
-
-`INJ_SEND_TX_HASH` が残っている場合は、再送する前に手順 5 で結果を確認する。`TX_HASH` だけが残っている場合は、今回の INJ 送金に対応する値か確認し、[確定待ちの再開手順](#送信後に確定待ちがタイムアウトした)で照会する。`TX_HASH` は別の取引の値である場合もある。
-`未設定` は現在のシェルに値がないことを示し、未送信であることを保証しない。
-JSON の解析に失敗した場合や送信済みか判断できない場合は、送金を繰り返さず、[応答ログの確認手順](#json-の解析に失敗した)へ進む。
-
-受取アドレスと上記の確認結果に問題がなければ、送金する。
-
-```bash
-set +e +u
-set +o pipefail
 unset INJ_SEND_TX_HASH TX_HASH TX_RESULT
 export AMOUNT="1000000000000000inj"
 export BANK_SEND_GAS=200000
@@ -184,14 +154,13 @@ fi
 ```
 
 `run_tx` が送金結果の TxHash を取得して確定成功を確認し、`INJ_SEND_TX_HASH` に自動で保存する。手順 5 ではこの値を使うため、TxHash の転記は不要である。失敗した場合はエラーと終了コードを表示してターミナルに戻る。`INJ_SEND_STATUS` は成功時に `0`、失敗時にその終了コードになる。
-送信前にログ保存先が表示され、送信・照会の応答は JSON の解析前にファイルへ保存される。JSON の解析に失敗した場合も、[応答ログの確認手順](#json-の解析に失敗した)で確認できる。
-送金処理でエラーが発生した場合は次へ進まない。確定待ちがタイムアウトした場合も同じ送金を繰り返さず、[確定待ちの再開手順](#送信後に確定待ちがタイムアウトした)で照会する。
+送信・照会の応答は JSON の解析前にログへ保存される。JSON の解析に失敗した場合は、送金を繰り返さず[応答ログの確認手順](#json-の解析に失敗した)へ進む。確定待ちのタイムアウト時は、[確定待ちの再開手順](#送信後に確定待ちがタイムアウトした)で照会する。
 この受取先の設定は後続の TokenFactory・CW20 の送金にも引き継がれる。
 
 <details>
 <summary>補足：送金コマンドと TxHash の自動取得</summary>
 
-`bank-send.sh` は送信元の鍵、手順 4 で設定した受取アドレス、送金量を使って `injectived tx bank send` を実行する。補助スクリプトの代わりに直接 CLI を使う場合も、次のように `run_tx` で実行すると同じ変数に TxHash が保存される。
+`bank-send.sh` は送信元の鍵、手順 4 で設定した受取アドレス、送金量を使って `injectived tx bank send` を実行する。次の直接 CLI の例は上の送金ブロックの代替であり、両方を実行しない。直接 CLI を使う場合も `run_tx` で実行すると同じ変数に TxHash が保存される。
 
 ```bash
 AMOUNT="1000000000000000inj"
@@ -221,15 +190,6 @@ run_tx --hash-var INJ_SEND_TX_HASH injectived tx bank send "$KEY_NAME" "$RECIPIE
 <summary>補足：test keyring を指定した過去の送金記録</summary>
 
 過去の手順では、鍵名と keyring backend の指定に不一致があった。現行の手順は既定の鍵名を `testwallet`、`KEYRING_BACKEND` を `test` に統一し、鍵の取得と送金の両方で同じ保存方式を指定する。
-設定は `source scripts/injectived/load-env.sh` で読み込み、次のコマンドで鍵情報と残高を確認できる。
-
-```bash
-echo "KEY_NAME=$KEY_NAME"
-injectived keys show "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND"
-injectived query bank balances "$MY_ADDR" \
-  --chain-id="$CHAIN_ID" \
-  --node="$NODE"
-```
 
 以下は、過去の記録の出力構造を示したものである。アドレス、公開鍵、TxHash は例示用の表記に置き換えている。
 
@@ -596,8 +556,6 @@ export GAS=3000000
 source scripts/CW20/load-env.sh &&
 export SENDER_ADDR="$MY_ADDR" &&
 export CREATOR_ADDR="$MY_ADDR" &&
-declare -F run_tx wait_tx tx_event_value &&
-printf '署名者: %s\nWASM: %s\n' "$SENDER_ADDR" "$WASM_PATH" &&
 run_tx --hash-var STORE_TX_HASH env CONFIRM_TX=yes bash ./setup/normal/11-store-cw20-code.sh
 ```
 
@@ -825,39 +783,6 @@ run_tx --hash-var CW20_MINT_TX_HASH injectived tx wasm execute "$CONTRACT_ADDR" 
 
 ## 困ったとき
 
-### コマンドを貼り付けるとターミナルが閉じる
-
-対話中の Bash で `set -e` を有効にすると、コマンドの失敗で Bash が終了する場合がある。ターミナルの設定によっては、そのままウィンドウも閉じる。この手順では対話シェルに `set -euo pipefail` を設定せず、操作の失敗と終了コードを表示する。個別のシェルスクリプト内の設定は、その子プロセスだけに適用される。
-
-ターミナルを開き直したら、まず Bash で次を実行して対話シェルの設定を戻す。この操作では送金しない。
-
-```bash
-set +e +u
-set +o pipefail
-```
-
-エラーが残っていない場合は、次の送金を実行する前に、読み取りだけの診断を行う。出力は画面と `~/sus-bc2-shell-diagnostics.log` に残す。
-まず[手順 4 の確認コマンド](#4-injを送金する)で、Bash のバージョン、必要なコマンド、取引関数の読み込みを確認する。
-
-```bash
-cd ~/temp/sus_BC2
-{
-  printf 'BASH_VERSION=%s\nshell flags=%s\n' "${BASH_VERSION:-未設定}" "$-"
-  command -v bash jq injectived
-  git log -1 --oneline
-  bash -n scripts/injectived/tx-utils.sh
-  bash -n scripts/injectived/bank-send.sh
-} 2>&1 | tee -a "$HOME/sus-bc2-shell-diagnostics.log"
-```
-
-これは取引を送信せず、鍵も作成・変更しない。閉じる直前の操作が送信済みか不明な場合は、送金ブロックを繰り返さず、表示・記録された今回の TxHash を照会する。
-保存済みの値が残っているかは、[手順 4 の TxHash 確認コマンド](#4-injを送金する)で確認する。変数を消したり送金をやり直したりする前に実行する。
-WSL 自体が停止したかは、この症状だけでは判断できない。Windows の PowerShell で次を実行すると、ディストリビューションの状態を確認できる（[Microsoft のコマンド一覧](https://learn.microsoft.com/en-us/windows/wsl/basic-commands#list-installed-linux-distributions)）。
-
-```powershell
-wsl --list --verbose
-```
-
 ### `run_tx: command not found` と表示される
 
 `run_tx` は `injectived` のサブコマンドではなく、[tx-utils.sh](../scripts/injectived/tx-utils.sh) が現在の Bash に定義する関数である。別のターミナルを開いた場合や、取引関数を読み込む前に操作した場合は未定義になる。
@@ -868,10 +793,7 @@ CW20 の `load-env.sh` はこの関数も読み込む。修正前のファイル
 ```bash
 cd ~/temp/sus_BC2
 source scripts/injectived/tx-utils.sh
-declare -F run_tx wait_tx tx_event_value
 ```
-
-この3つの関数名が表示されることを確認する。上のコマンドは取引を送信しない。
 
 `run_tx: command not found` で失敗した行では、その引数に指定した WASM 登録スクリプトは実行されていない。その直後に `export STORE_TX_HASH="$TX_HASH"` を実行しても、今回の登録結果にはならない。今回のエラーだけが発生し、ほかに登録を送信していない場合は、前回の値を消してから手順 7.1 を1回実行する。
 
