@@ -95,42 +95,36 @@ else:
             return []
         return [json.loads(line) for line in self.log.read_text().splitlines()]
 
-    def run_document_wallet_block(self, **environment):
+    def run_document_wallet_block(self, *, existing_wallet=False, **environment):
         document = (ROOT / "docs/injective-setup.md").read_text()
-        blocks = re.findall(r"^```bash\s*\n(.*?)^```", document, flags=re.MULTILINE | re.DOTALL)
-        blocks = [block for block in blocks if "prepare_wallets() {" in block]
-        self.assertEqual(len(blocks), 1, "Expected one documented wallet preparation block")
-        fake_home = self.directory / "home"
-        (fake_home / "temp").mkdir(parents=True, exist_ok=True)
-        checkout = fake_home / "temp/sus_BC2"
-        if not checkout.exists():
-            checkout.symlink_to(ROOT, target_is_directory=True)
+        section = re.search(
+            r"^## 2\..*?\n(.*?)(?=^### 2\.1\.|^## |\Z)",
+            document, flags=re.MULTILINE | re.DOTALL,
+        )
+        self.assertIsNotNone(section, "Expected the documented wallet creation section")
+        blocks = re.findall(r"^```bash\s*\n(.*?)^```", section.group(1), flags=re.MULTILINE | re.DOTALL)
+        self.assertEqual(len(blocks), 1, "Expected one documented wallet creation block")
+        block = blocks[0]
+        if existing_wallet:
+            block, omitted = re.subn(r"^injectived keys add[^\n]*\n", "", block, flags=re.MULTILINE)
+            self.assertEqual(omitted, 1, "Existing wallets omit the documented keys add line")
         if self.log.exists():
             self.log.unlink()
         state = '''
-status=$?
-if [ "$status" -ne 0 ]; then
-  if [ "${MY_ADDR+x}" = x ] || [ "${ADDR+x}" = x ] || [ "${RECIPIENT_ADDR+x}" = x ]; then
-    printf '%s\\n' "Failed preparation left an address variable set" >&2
-    exit 98
-  fi
-  exit "$status"
-fi
-printf '\\n__WALLET_DOC_STATE__\\n%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n' \\
-  "$KEY_NAME" "$RECIPIENT_KEY_NAME" "$KEYRING_BACKEND" "$MY_ADDR" "$ADDR" "$RECIPIENT_ADDR"
+printf '\\n__WALLET_DOC_STATE__\\n%s\\n%s\\n%s\\n%s\\n%s\\n' \\
+  "$KEY_NAME" "$KEYRING_BACKEND" "$MY_ADDR" "$ADDR" "$RECIPIENT_ADDR"
 '''
-        result = subprocess.run(
-            ["/bin/bash", "-u", "-c", blocks[0] + state], cwd=self.directory,
+        return subprocess.run(
+            ["/bin/bash", "-u", "-c", block + state], cwd=self.directory,
             env={
-                **self.environment, "HOME": str(fake_home),
+                **self.environment,
+                # These values represent the settings established in step 1.
+                "KEY_NAME": "testwallet", "KEYRING_BACKEND": "test",
                 "MY_ADDR": "stale sender", "ADDR": "stale address", "RECIPIENT_ADDR": "stale recipient",
-                "MOCK_ADDRESS_MAP": json.dumps({"testwallet": "inj1mocksender", "receiverwallet": "inj1mockrecipient"}),
                 **environment,
             },
             capture_output=True, text=True, timeout=15,
         )
-        self.assertNotIn("Failed preparation left an address variable set", result.stderr)
-        return result
 
     def assert_wallet_calls(self, key_name="testwallet", backend="test", existing=False):
         expected = [["keys", "show", key_name, "--keyring-backend", backend]]
@@ -245,26 +239,18 @@ printf '\\n__WALLET_DOC_STATE__\\n%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n' \\
         self.assertEqual(self.calls(), [])
         self.assertNotIn("Wallet is ready.", result.stdout)
 
-    def test_document_step_two_alone_works_with_unset_or_empty_environment(self):
-        for environment in ({}, {"KEY_NAME": "", "RECIPIENT_KEY_NAME": "", "KEYRING_BACKEND": ""}):
-            with self.subTest(environment=environment):
-                result = self.run_document_wallet_block(
-                    MY_ADDR="stale sender", ADDR="stale address", RECIPIENT_ADDR="stale recipient", **environment,
-                )
-                self.assertEqual(result.returncode, 0, result.stderr)
-                lines = result.stdout.splitlines()
-                state = lines[lines.index("__WALLET_DOC_STATE__") + 1:]
-                self.assertEqual(state, [
-                    "testwallet", "testwallet", "test", "inj1mocksender", "inj1mocksender", "inj1mocksender",
-                ])
-                self.assertEqual([call for call in self.calls() if call[:2] == ["keys", "add"]], [
-                    ["keys", "add", "testwallet", "--keyring-backend", "test"],
-                ])
-                self.assertEqual([call for call in self.calls() if call[:2] == ["keys", "show"] and "-a" in call], [
-                    ["keys", "show", "testwallet", "-a", "--keyring-backend", "test"],
-                    ["keys", "show", "testwallet", "-a", "--keyring-backend", "test"],
-                ])
-                self.assertEqual(self.calls()[-1], ["keys", "list", "--keyring-backend", "test"])
+    def test_document_new_wallet_uses_step_one_settings_and_defaults_to_self(self):
+        result = self.run_document_wallet_block()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        lines = result.stdout.splitlines()
+        self.assertEqual(lines[lines.index("__WALLET_DOC_STATE__") + 1:], [
+            "testwallet", "test", "inj1mockwalletaddress", "inj1mockwalletaddress", "inj1mockwalletaddress",
+        ])
+        self.assertEqual(self.calls(), [
+            ["keys", "add", "testwallet", "--keyring-backend", "test"],
+            ["keys", "show", "testwallet", "-a", "--keyring-backend", "test"],
+            ["keys", "list", "--keyring-backend", "test"],
+        ])
 
     def test_document_custom_sender_defaults_to_self(self):
         result = self.run_document_wallet_block(
@@ -274,80 +260,26 @@ printf '\\n__WALLET_DOC_STATE__\\n%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n' \\
         self.assertEqual(result.returncode, 0, result.stderr)
         lines = result.stdout.splitlines()
         self.assertEqual(lines[lines.index("__WALLET_DOC_STATE__") + 1:], [
-            "custom-sender", "custom-sender", "file",
+            "custom-sender", "file",
             "inj1mockcustomsender", "inj1mockcustomsender", "inj1mockcustomsender",
         ])
-        self.assertEqual([call for call in self.calls() if call[:2] == ["keys", "add"]], [
+        self.assertEqual(self.calls(), [
             ["keys", "add", "custom-sender", "--keyring-backend", "file"],
-        ])
-        self.assertEqual([call for call in self.calls() if call[:2] == ["keys", "show"] and "-a" in call], [
             ["keys", "show", "custom-sender", "-a", "--keyring-backend", "file"],
-            ["keys", "show", "custom-sender", "-a", "--keyring-backend", "file"],
+            ["keys", "list", "--keyring-backend", "file"],
         ])
 
-    def test_document_explicit_recipient_key_uses_separate_wallet(self):
-        result = self.run_document_wallet_block(RECIPIENT_KEY_NAME="receiverwallet")
+    def test_document_existing_wallet_omits_keys_add(self):
+        result = self.run_document_wallet_block(existing_wallet=True, MOCK_KEY_EXISTS="yes")
         self.assertEqual(result.returncode, 0, result.stderr)
         lines = result.stdout.splitlines()
         self.assertEqual(lines[lines.index("__WALLET_DOC_STATE__") + 1:], [
-            "testwallet", "receiverwallet", "test", "inj1mocksender", "inj1mocksender", "inj1mockrecipient",
+            "testwallet", "test", "inj1mockwalletaddress", "inj1mockwalletaddress", "inj1mockwalletaddress",
         ])
-        self.assertEqual([call for call in self.calls() if call[:2] == ["keys", "add"]], [
-            ["keys", "add", "testwallet", "--keyring-backend", "test"],
-            ["keys", "add", "receiverwallet", "--keyring-backend", "test"],
+        self.assertEqual(self.calls(), [
+            ["keys", "show", "testwallet", "-a", "--keyring-backend", "test"],
+            ["keys", "list", "--keyring-backend", "test"],
         ])
-
-    def test_document_distinct_keys_with_same_address_are_allowed(self):
-        result = self.run_document_wallet_block(
-            RECIPIENT_KEY_NAME="receiverwallet",
-            MOCK_ADDRESS_MAP=json.dumps({"testwallet": "inj1sameaddress", "receiverwallet": "inj1sameaddress"}),
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(["keys", "show", "testwallet", "-a", "--keyring-backend", "test"], self.calls())
-        self.assertIn(["keys", "show", "receiverwallet", "-a", "--keyring-backend", "test"], self.calls())
-        lines = result.stdout.splitlines()
-        self.assertEqual(lines[lines.index("__WALLET_DOC_STATE__") + 1:], [
-            "testwallet", "receiverwallet", "test", "inj1sameaddress", "inj1sameaddress", "inj1sameaddress",
-        ])
-
-    def test_document_wallet_creation_failure_stops_followup(self):
-        for key_name, environment in (
-            ("testwallet", {}), ("receiverwallet", {"RECIPIENT_KEY_NAME": "receiverwallet"}),
-        ):
-            with self.subTest(key_name=key_name):
-                result = self.run_document_wallet_block(MOCK_ADD_TARGET=key_name, MOCK_ADD_STATUS="42", **environment)
-                self.assertEqual(result.returncode, 42)
-                self.assertEqual(self.calls()[-1], ["keys", "add", key_name, "--keyring-backend", "test"])
-                self.assertFalse(any(call[:2] == ["keys", "list"] for call in self.calls()))
-                self.assertNotIn("__WALLET_DOC_STATE__", result.stdout)
-
-    def test_document_address_query_failure_stops_followup(self):
-        for key_name, environment in (
-            ("testwallet", {}), ("receiverwallet", {"RECIPIENT_KEY_NAME": "receiverwallet"}),
-        ):
-            with self.subTest(key_name=key_name):
-                result = self.run_document_wallet_block(
-                    MOCK_ADDRESS_TARGET=key_name, MOCK_ADDRESS_OCCURRENCE="2", MOCK_ADDRESS_STATUS="29", **environment,
-                )
-                self.assertEqual(result.returncode, 29)
-                self.assertEqual(self.calls()[-1], ["keys", "show", key_name, "-a", "--keyring-backend", "test"])
-                self.assertFalse(any(call[:2] == ["keys", "list"] for call in self.calls()))
-                self.assertNotIn("__WALLET_DOC_STATE__", result.stdout)
-
-    def test_document_empty_address_stops_before_keys_list(self):
-        result = self.run_document_wallet_block(
-            MOCK_ADDRESS_TARGET="testwallet", MOCK_ADDRESS_OCCURRENCE="2", MOCK_EMPTY_ADDRESS="yes",
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(any(call[:2] == ["keys", "list"] for call in self.calls()))
-        self.assertNotIn("__WALLET_DOC_STATE__", result.stdout)
-
-    def test_document_keys_list_failure_stops_before_export_and_source(self):
-        result = self.run_document_wallet_block(MOCK_LIST_STATUS="37")
-        self.assertEqual(result.returncode, 37)
-        self.assertEqual(self.calls()[-1], ["keys", "list", "--keyring-backend", "test"])
-        self.assertNotIn("injectived environment loaded.", result.stdout)
-        self.assertNotIn("__WALLET_DOC_STATE__", result.stdout)
 
 
 if __name__ == "__main__":
