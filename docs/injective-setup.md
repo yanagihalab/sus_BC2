@@ -347,6 +347,15 @@ set_token_metadata
 check_tx "メタデータ設定で返されたTxHash"
 ```
 
+確定成功を確認したら、対象の `DENOM` に登録されたメタデータを照会する。
+
+```bash
+injectived query bank denom-metadata "$DENOM" \
+  --chain-id="$CHAIN_ID" --node="$NODE" --output json | jq
+```
+
+出力の `metadata` にある `name`・`symbol`・`description`・`display`・`denom_units`・`decimals`・`uri`・`uri_hash` が、設定した内容と一致することを確認する。
+
 ### 6.3. MTK をミントする
 
 小数桁数 `6` の場合、`1000000000` は `1000 MTK` に相当する。
