@@ -4,14 +4,14 @@
 CLI の設定とコントラクトへの操作は、[injectived の設定・操作手順](injective-setup.md) を参照する。
 以下のコマンドは、リポジトリルートから実行する。
 
-初期化メッセージ（instantiate message）は、次のシェルスクリプトで作成する。
+まずリポジトリへ移動し、`load-env.sh` で CW20 用の環境変数を現在の Bash に読み込む。表示された鍵名（`KEY_NAME`）と接続先（`CHAIN_ID`・`NODE`）を確認する。
 
 ```bash
 cd ~/temp/sus_BC2
 source scripts/CW20/load-env.sh
 ```
 
-同じ Bash で、必要な値を空の二重引用符の間に入力して設定する。空欄の場合は、各コメントに記載した既定値を使う。
+同じ Bash で、トークン情報・初期残高・アドレス・出力ファイル名を環境変数に設定する。必要な値は空の二重引用符の間に入力する。空欄時の動作は各コメントを参照する。
 
 ```bash
 # トークンの名称を入力する。空欄の場合は My Token を使う。
@@ -29,20 +29,20 @@ export CREATOR_ADDR=""
 export OUTPUT_FILE=""
 ```
 
-設定後、次のコマンドで JSON ファイルを作成する。
+設定した環境変数を使い、初期化メッセージの JSON ファイルを生成する。スクリプトは生成後に `jq` で JSON の構文を確認し、内容を表示する。
 
 ```bash
 bash ./scripts/CW20/create-instantiate-msg.sh
 ```
 
-標準の出力ファイル名は `instantiate_msg.json` で、生成後に JSON の内容を表示する。
+標準の出力ファイル名は `instantiate_msg.json` である。表示された JSON で、名称・シンボル・小数桁数・初期残高が設定どおりであること、`initial_balances` の受取先と `mint.minter` が意図したアドレスであることを確認する。
 CW20 の symbol は英字またはハイフンの3〜12文字で指定する。TokenFactory の `factory/.../mtk` という denom は symbol として使用できない。
 
 <details>
 <summary>補足：初期化メッセージ生成スクリプトの内容</summary>
 
-`create-instantiate-msg.sh` は、次の値を使って初期残高と minter を含む JSON を作成する。
-`CREATOR_ADDR` が未設定の場合は、鍵からアドレスを取得する。
+次は `create-instantiate-msg.sh` の主な内部処理である。設定値を既定値で補い、シンボルの形式を確認してから、初期残高と minter を含む JSON を書き出す。
+`CREATOR_ADDR` が未設定または空欄の場合は、使用する鍵からアドレスを取得する。
 
 ```bash
 # 設定した環境変数を使い、未設定または空欄の値を既定値で補う。
