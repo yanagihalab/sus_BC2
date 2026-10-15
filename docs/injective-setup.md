@@ -119,12 +119,23 @@ injectived query bank balances "$MY_ADDR" \
   --node="$NODE" --chain-id="$CHAIN_ID" --output json | jq
 ```
 
-## 4. 別の宛先へ INJ を送金する
+## 4. INJを送金する
 
 初期設定の宛先は自分の `MY_ADDR` である。この手順では別の宛先へ `0.001 INJ` を送金するため、`inj1...` を実際の受取アドレスに置き換えて `RECIPIENT_ADDR` に設定する。
 
 ```bash
 export RECIPIENT_ADDR="inj1..."
+```
+
+設定した受取アドレスを確認する。
+
+```bash
+echo "RECIPIENT_ADDR=$RECIPIENT_ADDR"
+```
+
+表示されたアドレスを確認してから、送金する。
+
+```bash
 export AMOUNT="1000000000000000inj"
 export BANK_SEND_GAS=200000
 CONFIRM_SEND=yes bash ./scripts/injectived/bank-send.sh
