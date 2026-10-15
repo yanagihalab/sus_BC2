@@ -6,7 +6,7 @@
 本書のコマンドは、特に指定がない限り、Kali Linux のターミナルでリポジトリルートから実行する。パスは標準配置の例であり、作業先を変更した場合は読み替える。
 
 以下は同じ Bash セッションで、番号順に実行する。最初の `bash` で Bash を起動する。初期設定では、送信元・受取先の両方に自分の `testwallet` を使用する。既存の同名ウォレットは再利用され、新しいウォレットを作る場合は鍵名を変更する。
-書き込み操作ごとに返された TxHash を照会し、ブロックへの取り込みと `code: 0` を確認してから次へ進む。Faucet での入金はブラウザで行い、コード中の TxHash・code ID・コントラクトアドレスは、その操作の実際の結果に置き換える。
+書き込み操作ごとに返された TxHash を照会し、ブロックへの取り込みと `code: 0` を確認してから次へ進む。Faucet での入金はブラウザで行う。手順 6 以降の TxHash・code ID・コントラクトアドレスは、コマンドの実行結果から自動で設定する。
 
 ## 1. 接続設定を読み込む
 
@@ -284,7 +284,7 @@ check_tx() {
 check_tx "INJ送金で返されたTxHash"
 ```
 
-`check_tx` の引数は、その操作で返された実際の TxHash に置き換える。まだ見つからない場合は、数秒待って同じコマンドを再実行する。以降の操作でもこの関数を使用する。
+`check_tx` の引数は、その操作で返された実際の TxHash に置き換える。まだ見つからない場合は、数秒待って同じコマンドを再実行する。手順 6 以降では、次節の `run_tx` で TxHash の取得と確定結果の確認を自動化する。
 
 トランザクションは、次の Explorer でも確認できる。
 
@@ -292,6 +292,47 @@ check_tx "INJ送金で返されたTxHash"
 - [Injective Testnet Explorer](https://testnet.explorer.injective.network/)
 
 ## 6. TokenFactory で MTK を作成・送金する
+
+手順 2 まで実行した同じ Bash セッションで、次の設定を読み込む。手順 6・7 では `run_tx` が送信結果から TxHash を取得し、確定結果の成功を確認してから次へ進む。コマンドが失敗した場合は、この Bash セッションの処理を停止する。
+
+```bash
+set -euo pipefail
+source scripts/injectived/tx-utils.sh
+```
+
+`TX_HASH` には直近の TxHash、`TX_RESULT` には成功が確認できた確定結果の JSON が入る。照会は既定で2秒間隔・最大30回行い、送信そのものは再試行しない。取引ごとの TxHash も、以下の名前で保存する。
+
+| 操作 | 保存する環境変数 |
+| --- | --- |
+| denom 作成 | `CREATE_DENOM_TX_HASH` |
+| メタデータ設定 | `METADATA_TX_HASH` |
+| TokenFactory のミント・送金 | `TOKENFACTORY_MINT_TX_HASH`・`TOKENFACTORY_SEND_TX_HASH` |
+| WASM 登録・コントラクト初期化 | `STORE_TX_HASH`・`INSTANTIATE_TX_HASH` |
+| CW20 の送金・ミント | `CW20_SEND_TX_HASH`・`CW20_MINT_TX_HASH` |
+
+<details>
+<summary>補足：TxHash・code ID・コントラクトアドレスの自動取得</summary>
+
+[tx-utils.sh](../scripts/injectived/tx-utils.sh) の `run_tx` は、渡されたコマンドを1回実行し、`--output json` の応答から `txhash` を取得する。`--broadcast-mode sync` の受付結果だけで成功とせず、`wait_tx` が次の照会を繰り返して、ブロックへの取り込みを待つ。
+
+```bash
+injectived q tx "$TX_HASH" \
+  --chain-id="$CHAIN_ID" --node="$NODE" --output json
+```
+
+照会結果の TxHash が送信時の値と一致し、`height` が正の整数、`code` が `0` である場合だけ、確定結果を `TX_RESULT` に保存する。送信・照会の JSON が不正な場合や、確定結果が失敗の場合は停止し、以前の成功結果を再利用しない。
+`TX_MAX_ATTEMPTS`（正の整数、既定 `30`）と `TX_RETRY_DELAY`（秒、非負整数、既定 `2`）で、照会回数と間隔を指定できる。待機上限に達した場合は表示された TxHash を確認し、同じ送信コマンドを繰り返さず、照会で結果を確認する。
+
+`tx_event_value` は `TX_RESULT` のイベントから、指定した項目を取り出す。CLI の通常形式と `tx_response` で包まれた形式、`events` と `logs[].events` の両方を扱う。
+
+```bash
+CODE_ID="$(tx_event_value store_code code_id)"
+CONTRACT_ADDR="$(tx_event_value instantiate _contract_address contract_address)"
+```
+
+上の2行は、それぞれ WASM 登録・初期化の成功直後に実行する。`TX_RESULT` は次の書き込み操作で更新されるため、手順 7.2・7.5 の順序に従う。対象項目が見つからない場合や、異なる値が複数ある場合は停止する。同じ値が複数のイベントに含まれる場合は1つにまとめる。
+
+</details>
 
 ### 6.1. 設定を読み込み、denom を作成する
 
@@ -303,11 +344,13 @@ export SUBDENOM="mtk"
 export CREATOR_ADDR="$MY_ADDR"
 export DENOM="factory/${CREATOR_ADDR}/${SUBDENOM}"
 source scripts/tokenfactory/load-env.sh
-CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh create-denom
 ```
 
+`DENOM` は自分のアドレスと `SUBDENOM` から自動で組み立てる。作成済みの denom を使う場合も上の設定は実行し、次の作成ブロックだけを省略する。
+
 ```bash
-check_tx "denom作成で返されたTxHash"
+run_tx env CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh create-denom
+export CREATE_DENOM_TX_HASH="$TX_HASH"
 ```
 
 ### 6.2. メタデータを設定する
@@ -316,7 +359,8 @@ check_tx "denom作成で返されたTxHash"
 [公式 v1.18.0 の CLI](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/client/cli/tx.go#L219-L267) は末尾に `[decimals] [shouldDisableAdminBurn]` を取り、[公式ガイド](https://docs.injective.network/developers-defi/token-launch) は `[decimals]` のみの例を掲載している。補助スクリプトは `6 false` または `6` を渡し、どちらにも一致しない場合やヘルプ取得に失敗した場合は送信せず停止する。
 
 ```bash
-CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh set-metadata
+run_tx env CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh set-metadata
+export METADATA_TX_HASH="$TX_HASH"
 ```
 
 <details>
@@ -329,7 +373,7 @@ set_token_metadata() {
   local metadata_help
   local metadata_args
   metadata_help="$(injectived tx tokenfactory set-denom-metadata --help)" || return
-  printf '%s\n' "$metadata_help"
+  printf '%s\n' "$metadata_help" >&2
   if grep -Fq '[shouldDisableAdminBurn]' <<< "$metadata_help"; then
     metadata_args=(6 false)
   elif grep -Eq 'set-denom-metadata .*\[decimals\]([[:space:]]+\[flags\])?[[:space:]]*$' <<< "$metadata_help"; then
@@ -344,24 +388,22 @@ set_token_metadata() {
     "${metadata_args[@]}" \
     --from="$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" \
     --chain-id="$CHAIN_ID" --node="$NODE" \
-    --gas-prices="$GAS_PRICES" --gas="$GAS" -y
+    --gas-prices="$GAS_PRICES" --gas="$GAS" \
+    --output json --broadcast-mode sync -y
 }
-set_token_metadata
+run_tx set_token_metadata
+export METADATA_TX_HASH="$TX_HASH"
 ```
 
 </details>
-
-```bash
-check_tx "メタデータ設定で返されたTxHash"
-```
 
 ### 6.3. MTK をミントする
 
 小数桁数 `6` の場合、`1000000000` は `1000 MTK` に相当する。
 
 ```bash
-MINT_AMOUNT=1000000000 CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh mint
-check_tx "MTKミントで返されたTxHash"
+run_tx env MINT_AMOUNT=1000000000 CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh mint
+export TOKENFACTORY_MINT_TX_HASH="$TX_HASH"
 ```
 
 ### 6.4. 残高を確認する
@@ -376,8 +418,8 @@ bash ./setup/normal/07-tokenfactory-mtk.sh balance
 
 ```bash
 export SEND_AMOUNT=1000000
-CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh send
-check_tx "MTK送金で返されたTxHash"
+run_tx env CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh send
+export TOKENFACTORY_SEND_TX_HASH="$TX_HASH"
 injectived query bank balances "$RECIPIENT_ADDR" \
   --node="$NODE" --chain-id="$CHAIN_ID" --output json | jq
 ```
@@ -443,7 +485,7 @@ DENOM=[factory/inj.../mtk]
 `create-denom` では、subdenom、名称、記号、小数桁数を指定する。
 
 ```bash
-injectived tx tokenfactory create-denom \
+run_tx injectived tx tokenfactory create-denom \
   "$SUBDENOM" "My Token" "MTK" 6 \
   --from="$KEY_NAME" \
   --keyring-backend "$KEYRING_BACKEND" \
@@ -451,7 +493,9 @@ injectived tx tokenfactory create-denom \
   --node="$NODE" \
   --gas-prices="$GAS_PRICES" \
   --gas="$GAS" \
+  --output json --broadcast-mode sync \
   -y
+export CREATE_DENOM_TX_HASH="$TX_HASH"
 ```
 
 作成トランザクションの成功を確認してから、以降の操作へ進む。
@@ -477,14 +521,16 @@ Usage に想定した末尾引数が見つからない場合は送信せず停�
 
 ```bash
 MINT_AMOUNT="${MINT_AMOUNT:-1000000000}"
-injectived tx tokenfactory mint "${MINT_AMOUNT}${DENOM}" "$CREATOR_ADDR" \
+run_tx injectived tx tokenfactory mint "${MINT_AMOUNT}${DENOM}" "$CREATOR_ADDR" \
   --from="$KEY_NAME" \
   --keyring-backend "$KEYRING_BACKEND" \
   --chain-id="$CHAIN_ID" \
   --node="$NODE" \
   --gas-prices="$GAS_PRICES" \
   --gas="$GAS" \
+  --output json --broadcast-mode sync \
   -y
+export TOKENFACTORY_MINT_TX_HASH="$TX_HASH"
 ```
 
 `MINT_AMOUNT` は最小単位の数量で、変数自体には denom を含めない。
@@ -501,18 +547,20 @@ injectived query bank balances "$CREATOR_ADDR" \
 ```bash
 RECIPIENT_ADDR="${RECIPIENT_ADDR:-$CREATOR_ADDR}"
 SEND_AMOUNT="${SEND_AMOUNT:-1000000}"
-injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "${SEND_AMOUNT}${DENOM}" \
+run_tx injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "${SEND_AMOUNT}${DENOM}" \
   --from="$KEY_NAME" \
   --keyring-backend "$KEYRING_BACKEND" \
   --chain-id="$CHAIN_ID" \
   --node="$NODE" \
   --gas-prices="$GAS_PRICES" \
   --gas="$GAS" \
+  --output json --broadcast-mode sync \
   -y
+export TOKENFACTORY_SEND_TX_HASH="$TX_HASH"
 ```
 
 `CONFIRM_TX=yes` は補助スクリプト側の実行条件である。直接 CLI を使う場合は、上記のコマンドで処理を実行する。
-各書き込み操作の結果は、返された TxHash で確認する。
+各書き込み操作の結果は `run_tx` が自動で照会し、確定結果の成功を確認する。
 
 </details>
 
@@ -527,22 +575,21 @@ export GAS=3000000
 export SENDER_ADDR="$MY_ADDR"
 export CREATOR_ADDR="$MY_ADDR"
 source scripts/CW20/load-env.sh
+unset CODE_ID CONTRACT_ADDR
 printf '署名者: %s\nWASM: %s\n' "$SENDER_ADDR" "$WASM_PATH"
-CONFIRM_TX=yes bash ./setup/normal/11-store-cw20-code.sh
+run_tx env CONFIRM_TX=yes bash ./setup/normal/11-store-cw20-code.sh
+export STORE_TX_HASH="$TX_HASH"
 ```
-
-CLI の実行確認が表示されたら、内容を確認して `y` を入力し、`Enter` を押す。
 
 ### 7.2. 登録結果を確認し、code ID を設定する
 
-```bash
-check_tx "WASM登録で返されたTxHash"
-```
-
-成功したトランザクションの `events` にある `code_id` を読み取り、次の値に設定する。
+直前の WASM 登録の確定結果から `code_id` を取得する。画面からの転記は不要である。
 
 ```bash
-export CODE_ID="取得したcode_id"
+CODE_ID="$(tx_event_value store_code code_id)"
+[[ "$CODE_ID" =~ ^[1-9][0-9]*$ ]]
+export CODE_ID
+printf 'CODE_ID=%s\n' "$CODE_ID"
 ```
 
 ### 7.3. 初期化メッセージを作成する
@@ -561,20 +608,22 @@ JSON の初期残高と minter のアドレスが `CREATOR_ADDR` と一致する
 
 ```bash
 export GAS=300000
-injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
+run_tx injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
   --from="$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" \
   --chain-id="$CHAIN_ID" --node="$NODE" \
   --label "cw20-mtk-sample" --no-admin \
-  --gas-prices="$GAS_PRICES" --gas="$GAS" --output json -y
-check_tx "初期化で返されたTxHash"
+  --gas-prices="$GAS_PRICES" --gas="$GAS" --output json --broadcast-mode sync -y
+export INSTANTIATE_TX_HASH="$TX_HASH"
 ```
 
 ### 7.5. コントラクトアドレスを設定する
 
-成功したトランザクションの `events` にある `_contract_address` または `contract_address` を読み取り、次の値に設定する。
+直前の初期化の確定結果から `_contract_address` または `contract_address` を取得する。
 
 ```bash
-export CONTRACT_ADDR="取得したcontract_address"
+CONTRACT_ADDR="$(tx_event_value instantiate _contract_address contract_address)"
+export CONTRACT_ADDR
+printf 'CONTRACT_ADDR=%s\n' "$CONTRACT_ADDR"
 ```
 
 ### 7.6. トークン情報と残高を確認する
@@ -592,12 +641,12 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 
 ```bash
 export CW20_SEND_AMOUNT=1000000
-injectived tx wasm execute "$CONTRACT_ADDR" \
+run_tx injectived tx wasm execute "$CONTRACT_ADDR" \
   '{"transfer":{"recipient":"'"$RECIPIENT_ADDR"'","amount":"'"$CW20_SEND_AMOUNT"'"}}' \
   --from "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" \
   --chain-id "$CHAIN_ID" --node "$NODE" \
-  --gas-prices "$GAS_PRICES" --gas "$GAS" --output json -y
-check_tx "CW20送金で返されたTxHash"
+  --gas-prices "$GAS_PRICES" --gas "$GAS" --output json --broadcast-mode sync -y
+export CW20_SEND_TX_HASH="$TX_HASH"
 injectived q wasm contract-state smart "$CONTRACT_ADDR" \
   '{"balance":{"address":"'"$RECIPIENT_ADDR"'"}}' --node "$NODE" --output json | jq
 ```
@@ -608,12 +657,12 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 
 ```bash
 export CW20_MINT_AMOUNT=1000000
-injectived tx wasm execute "$CONTRACT_ADDR" \
+run_tx injectived tx wasm execute "$CONTRACT_ADDR" \
   '{"mint":{"recipient":"'"$SENDER_ADDR"'","amount":"'"$CW20_MINT_AMOUNT"'"}}' \
   --from "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" \
   --chain-id "$CHAIN_ID" --node "$NODE" \
-  --gas-prices "$GAS_PRICES" --gas "$GAS" --output json -y
-check_tx "CW20ミントで返されたTxHash"
+  --gas-prices "$GAS_PRICES" --gas "$GAS" --output json --broadcast-mode sync -y
+export CW20_MINT_TX_HASH="$TX_HASH"
 injectived q wasm contract-state smart "$CONTRACT_ADDR" \
   '{"balance":{"address":"'"$SENDER_ADDR"'"}}' --node "$NODE" --output json | jq
 ```
@@ -651,30 +700,34 @@ export RECIPIENT_ADDR="${RECIPIENT_ADDR:-$SENDER_ADDR}"
 
 ```bash
 GAS=3000000
-injectived tx wasm store "$WASM_PATH" \
+run_tx injectived tx wasm store "$WASM_PATH" \
   --from="$KEY_NAME" \
   --keyring-backend "$KEYRING_BACKEND" \
   --chain-id="$CHAIN_ID" \
   --node="$NODE" \
   --gas-prices="$GAS_PRICES" \
-  --gas="$GAS"
+  --gas="$GAS" \
+  --output json --broadcast-mode sync -y
+export STORE_TX_HASH="$TX_HASH"
 ```
 
 `store` は WASM コードをチェーンへ登録する操作で、成功後に code ID を取得できる。
-このコマンドには `-y` がないため、CLI の確認に応答して実行する。
+補助スクリプトも `--output json --broadcast-mode sync -y` を指定し、`run_tx` が応答を読み取れる形式で送信する。
 `CONFIRM_TX` は補助スクリプトの実行条件であり、直接 CLI を使う例では指定しない。
 
 #### コントラクトの初期化
 
-コード登録時の TxHash を使って手順 5 の `check_tx` を実行し、結果の `events` から `code_id` を確認する。
-取得した値を `CODE_ID` に設定し、初期化メッセージを使ってコントラクトを作成する。
+コード登録を `run_tx` で実行した直後の `TX_RESULT` から、`store_code` イベントの `code_id` を自動で取り出す。
+その値を `CODE_ID` に設定し、初期化メッセージを使ってコントラクトを作成する。
 以下では、コード登録用に設定したガス上限を、初期化・送金・ミントで使う設定例の `300000` に変更する。`source` は既存の `GAS` を保持するため、この変更を明示している。
 
 ```bash
 GAS=300000
-CODE_ID="取得したcode_id"
+CODE_ID="$(tx_event_value store_code code_id)"
+[[ "$CODE_ID" =~ ^[1-9][0-9]*$ ]]
+export CODE_ID
 source scripts/CW20/load-env.sh
-injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
+run_tx injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
   --from="$KEY_NAME" \
   --keyring-backend "$KEYRING_BACKEND" \
   --chain-id="$CHAIN_ID" \
@@ -683,15 +736,17 @@ injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
   --no-admin \
   --gas-prices="$GAS_PRICES" \
   --gas="$GAS" \
-  --output json \
+  --output json --broadcast-mode sync \
   -y
+export INSTANTIATE_TX_HASH="$TX_HASH"
 ```
 
-初期化の TxHash で結果を確認し、`events` 内の `_contract_address` または `contract_address` の値を `CONTRACT_ADDR` に設定する。
+初期化の確定結果から、`instantiate` イベントの `_contract_address` または `contract_address` を `CONTRACT_ADDR` に設定する。
 `CODE_ID` は保存済みコードの番号、`CONTRACT_ADDR` は作成したコントラクトのアドレスであり、別の値である。
 
 ```bash
-CONTRACT_ADDR="取得したcontract_address"
+CONTRACT_ADDR="$(tx_event_value instantiate _contract_address contract_address)"
+export CONTRACT_ADDR
 source scripts/CW20/load-env.sh
 ```
 
@@ -714,7 +769,7 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 ```bash
 RECIPIENT_ADDR="${RECIPIENT_ADDR:-$SENDER_ADDR}"
 CW20_SEND_AMOUNT="1000000"
-injectived tx wasm execute "$CONTRACT_ADDR" \
+run_tx injectived tx wasm execute "$CONTRACT_ADDR" \
   '{"transfer":{"recipient":"'"$RECIPIENT_ADDR"'","amount":"'"$CW20_SEND_AMOUNT"'"}}' \
   --from "$KEY_NAME" \
   --keyring-backend "$KEYRING_BACKEND" \
@@ -722,8 +777,9 @@ injectived tx wasm execute "$CONTRACT_ADDR" \
   --node "$NODE" \
   --gas-prices "$GAS_PRICES" \
   --gas "$GAS" \
-  --output json \
+  --output json --broadcast-mode sync \
   -y
+export CW20_SEND_TX_HASH="$TX_HASH"
 ```
 
 #### ミント
@@ -732,7 +788,7 @@ injectived tx wasm execute "$CONTRACT_ADDR" \
 
 ```bash
 source scripts/CW20/load-env.sh
-injectived tx wasm execute "$CONTRACT_ADDR" \
+run_tx injectived tx wasm execute "$CONTRACT_ADDR" \
   '{"mint":{"recipient":"'"$SENDER_ADDR"'","amount":"'"$CW20_MINT_AMOUNT"'"}}' \
   --from "$KEY_NAME" \
   --keyring-backend "$KEYRING_BACKEND" \
@@ -740,10 +796,11 @@ injectived tx wasm execute "$CONTRACT_ADDR" \
   --node "$NODE" \
   --gas-prices "$GAS_PRICES" \
   --gas "$GAS" \
-  --output json \
+  --output json --broadcast-mode sync \
   -y
+export CW20_MINT_TX_HASH="$TX_HASH"
 ```
 
-送金・ミント後も、返された TxHash で結果を確認する。
+送金・ミント後も `run_tx` が確定結果の成功を確認する。TxHash はそれぞれ `CW20_SEND_TX_HASH`・`CW20_MINT_TX_HASH` に保存される。
 
 </details>

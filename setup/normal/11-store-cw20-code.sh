@@ -37,4 +37,7 @@ injectived tx wasm store "$WASM_PATH" \
   --chain-id="$CHAIN_ID" \
   --node="$NODE" \
   --gas-prices="$GAS_PRICES" \
-  --gas="$GAS"
+  --gas="$GAS" \
+  --output json \
+  --broadcast-mode sync \
+  -y

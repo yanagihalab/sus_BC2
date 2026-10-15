@@ -114,7 +114,8 @@ else:
             f'--chain-id={settings.get("CHAIN_ID", "injective-888")}',
             f'--node={settings.get("NODE", "https://injective-testnet-rpc.publicnode.com:443")}',
             f'--gas-prices={settings.get("GAS_PRICES", "500000000inj")}',
-            f'--gas={settings.get("GAS", "300000")}', "-y",
+            f'--gas={settings.get("GAS", "300000")}',
+            "--output", "json", "--broadcast-mode", "sync", "-y",
         ])
         self.assertIn(["keys", "show", key_name, "-a", "--keyring-backend", backend], self.calls())
         help_call = ["tx", "tokenfactory", "set-denom-metadata", "--help"]
