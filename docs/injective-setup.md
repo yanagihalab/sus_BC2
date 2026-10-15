@@ -5,7 +5,7 @@
 
 本書のコマンドは、特に指定がない限り、Kali Linux のターミナルでリポジトリルートから実行する。パスは標準配置の例であり、作業先を変更した場合は読み替える。
 
-以下は同じ Bash セッションで、番号順に実行する。最初の `bash` で Bash を起動する。初期設定では、送信元・受取先の両方に自分の `testwallet` を使用する。既存の同名ウォレットは再利用され、新しいウォレットを作る場合は鍵名を変更する。
+以下は同じ Bash セッションで、番号順に実行する。最初の `bash` で Bash を起動する。初期設定では、送信元・受取先の両方に自分の `testwallet` を使用する。作成済みのウォレットを使う場合は、その鍵名を指定する。新しいウォレットを作る場合は、未使用の鍵名を指定する。
 書き込み操作ごとに返された TxHash を照会し、ブロックへの取り込みと `code: 0` を確認してから次へ進む。Faucet での入金はブラウザで行う。手順 6 以降の TxHash・code ID・コントラクトアドレスは、コマンドの実行結果から自動で設定する。
 
 ## 1. 接続設定を読み込む
@@ -20,7 +20,6 @@ bash
 ```bash
 cd ~/temp/sus_BC2
 export KEY_NAME="testwallet"
-export RECIPIENT_KEY_NAME="$KEY_NAME"
 export KEYRING_BACKEND="test"
 export CHAIN_ID="injective-888"
 export NODE="https://injective-testnet-rpc.publicnode.com:443"
@@ -35,42 +34,19 @@ source scripts/injectived/load-env.sh
 
 ## 2. ウォレットを作成し、アドレスを取得する
 
-自分のウォレットを作成し、そのアドレスを送信元と受取先に設定する。初期設定では受取用の別ウォレットは作成しない。補助スクリプトには鍵名を引数で渡し、指定した鍵が存在しない場合だけ `injectived keys add` を実行する。
-次のブロックは、Bash で手順 2 だけを実行した場合も、未設定または空の鍵名・keyring backend を既定値で補う。手順 1 で指定した値があれば、その値を使う。
+手順 1 で設定した鍵名と keyring backend を使い、自分のウォレットを作成する。そのアドレスを送信元と受取先に設定する。作成済みのウォレットを使う場合は、最初の `injectived keys add` の行を省略する。
 
 ```bash
-prepare_wallets() {
-  local sender_addr recipient_addr
-  cd ~/temp/sus_BC2 || return
-  export KEY_NAME="${KEY_NAME:-testwallet}"
-  export RECIPIENT_KEY_NAME="${RECIPIENT_KEY_NAME:-$KEY_NAME}"
-  export KEYRING_BACKEND="${KEYRING_BACKEND:-test}"
-  unset MY_ADDR ADDR RECIPIENT_ADDR
-
-  bash ./scripts/injectived/create-test-wallet.sh "$KEY_NAME" || return
-  if [ "$RECIPIENT_KEY_NAME" != "$KEY_NAME" ]; then
-    bash ./scripts/injectived/create-test-wallet.sh "$RECIPIENT_KEY_NAME" || return
-  fi
-
-  sender_addr="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")" || return
-  if [ "$RECIPIENT_KEY_NAME" = "$KEY_NAME" ]; then
-    recipient_addr="$sender_addr"
-  else
-    recipient_addr="$(injectived keys show "$RECIPIENT_KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")" || return
-  fi
-  if [ -z "${sender_addr//[[:space:]]/}" ] || [ -z "${recipient_addr//[[:space:]]/}" ]; then
-    echo "アドレスを取得できませんでした。鍵名と keyring backend を確認してください。" >&2
-    return 1
-  fi
-  injectived keys list --keyring-backend "$KEYRING_BACKEND" || return
-  export MY_ADDR="$sender_addr" ADDR="$sender_addr" RECIPIENT_ADDR="$recipient_addr"
-  source scripts/injectived/load-env.sh || return
-  printf '送信元: %s\n受取先: %s\n' "$MY_ADDR" "$RECIPIENT_ADDR"
-}
-prepare_wallets
+injectived keys add "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND"
+MY_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
+export MY_ADDR
+export ADDR="$MY_ADDR"
+export RECIPIENT_ADDR="$MY_ADDR"
+injectived keys list --keyring-backend "$KEYRING_BACKEND"
+printf '送信元: %s\n受取先: %s\n' "$MY_ADDR" "$RECIPIENT_ADDR"
 ```
 
-すべて成功した場合だけ、取得したアドレスを現在のシェルへ設定する。初期設定では `RECIPIENT_ADDR` と `MY_ADDR` が同じ値になり、INJ・TokenFactory・CW20 の送金先に自分のアドレスを使用する。途中のコマンドが失敗した場合は、アドレスの表示や後続の処理へ進まず停止する。
+`MY_ADDR` と `ADDR` は自分のアドレス、`RECIPIENT_ADDR` は送金先である。初期設定では同じアドレスを使う。
 作成された鍵を使って、後続の送金・トークン作成・コントラクト操作を行う。新しいターミナルを開いた場合は、手順 1・2 を実行し直す。
 
 ### 2.1. 受取アドレスを設定する
@@ -94,57 +70,37 @@ export RECIPIENT_ADDR="$MY_ADDR"
 
 #### 環境変数の設定
 
-`load-env.sh` は `source` で読み込み、現在のシェルに `export` で値を設定する。
-`${変数:-既定値}` は、変数が未設定または空の場合に既定値を使う指定である。すでに設定した値は保持される。
-Injective 用の設定処理は次のとおりである。
+`load-env.sh` は `source` で読み込み、現在のシェルに `export` で値を設定する。すでに設定した値は保持される。
+ウォレット作成後に、接続設定とアドレスを手動で設定する場合は次のように実行する。
 
 ```bash
-export KEY_NAME="${KEY_NAME:-testwallet}"
-export CHAIN_ID="${CHAIN_ID:-injective-888}"
-export NODE="${NODE:-https://injective-testnet-rpc.publicnode.com:443}"
-export GAS_PRICES="${GAS_PRICES:-500000000inj}"
-export GAS="${GAS:-1000000}"
-export BANK_SEND_GAS="${BANK_SEND_GAS:-200000}"
-export AMOUNT="${AMOUNT:-100000000inj}"
-export KEYRING_BACKEND="${KEYRING_BACKEND:-test}"
-
-if command -v injectived >/dev/null 2>&1; then
-  export MY_ADDR="${MY_ADDR:-$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND" 2>/dev/null || true)}"
-else
-  export MY_ADDR="${MY_ADDR:-}"
-fi
-export ADDR="${ADDR:-$MY_ADDR}"
-export RECIPIENT_ADDR="${RECIPIENT_ADDR:-$MY_ADDR}"
+export KEY_NAME="testwallet"
+export KEYRING_BACKEND="test"
+export CHAIN_ID="injective-888"
+export NODE="https://injective-testnet-rpc.publicnode.com:443"
+export GAS_PRICES="500000000inj"
+export GAS=1000000
+export BANK_SEND_GAS=200000
+export AMOUNT="100000000inj"
+MY_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
+export MY_ADDR
+export ADDR="$MY_ADDR"
+export RECIPIENT_ADDR="$MY_ADDR"
 ```
 
 `KEY_NAME` は使用する鍵の名前、`CHAIN_ID` と `NODE` は接続先、`GAS_PRICES` はガス単価である。
-`GAS` はガス上限、`BANK_SEND_GAS` は INJ 送金用のガス上限、`AMOUNT` は送金量、`RECIPIENT_ADDR` は送金先を表す。送金先が未設定または空の場合は、自分の `MY_ADDR` を使う。明示した送金先は保持される。
+`GAS` はガス上限、`BANK_SEND_GAS` は INJ 送金用のガス上限、`AMOUNT` は送金量、`RECIPIENT_ADDR` は送金先を表す。上の例では、自分の `MY_ADDR` を送金先に設定する。
 `KEYRING_BACKEND` は鍵の保存方式を指定する。`keys show -a` は、鍵に対応するアドレスを取得する。
-鍵がまだない場合、アドレスは空のままとなるため、作成後に取得する。
+アドレスはウォレットを作成してから取得する。
 
 #### ウォレットの作成とアドレス取得
 
-`create-test-wallet.sh` は、同じ名前の鍵が存在するか確認し、未作成の場合だけウォレットを作成する。
-鍵名は第1引数で指定でき、`KEY_NAME` より優先される。どちらも未設定なら `testwallet` を使う。
-空文字の引数や空の `KEY_NAME` が明示されている場合は、別の鍵に置き換えずエラーで停止する。`KEYRING_BACKEND` の既定値は `test` である。
+ウォレットの作成には `keys add`、アドレスの取得には `keys show -a` を使う。
 
 ```bash
-bash ./scripts/injectived/create-test-wallet.sh testwallet
-```
-
-スクリプトが実行する鍵の確認・作成とアドレス取得は次のとおりである。
-
-```bash
-if ! injectived keys show "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" >/dev/null 2>&1; then
-  injectived keys add "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND"
-else
-  echo "Wallet already exists: $KEY_NAME"
-fi
+injectived keys add "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND"
 MY_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
-if [ -z "${MY_ADDR//[[:space:]]/}" ]; then
-  echo "Could not obtain an address for KEY_NAME=$KEY_NAME (KEYRING_BACKEND=$KEYRING_BACKEND)." >&2
-  exit 1
-fi
+export MY_ADDR
 ```
 
 作成済みの鍵を一覧で確認し、使用する鍵のアドレスを取得する場合は、次を実行する。
@@ -155,8 +111,6 @@ injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND"
 ```
 
 `keys add` は鍵とウォレットを作成する。作成後の `MY_ADDR` を Faucet や残高照会に使用する。
-補助スクリプトは別のプロセスとして実行されるため、その中の変数は呼び出し元のシェルへ反映されない。単独で使用した場合は、表示される `export` と `source` の案内を現在の Bash で実行する。
-手順 2 の関数は、鍵名・keyring backend を明示し、アドレス取得の成功を確認してから `export` する。`export MY_ADDR="$(injectived ...)"` のように一度に書くと CLI の失敗を `export` の成功で隠すため、代入と `export` を分けている。
 
 </details>
 
