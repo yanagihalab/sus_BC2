@@ -47,9 +47,9 @@ prepare_wallets() {
   export KEYRING_BACKEND="${KEYRING_BACKEND:-test}"
   unset MY_ADDR ADDR RECIPIENT_ADDR
 
-  ./scripts/injectived/create-test-wallet.sh "$KEY_NAME" || return
+  bash ./scripts/injectived/create-test-wallet.sh "$KEY_NAME" || return
   if [ "$RECIPIENT_KEY_NAME" != "$KEY_NAME" ]; then
-    ./scripts/injectived/create-test-wallet.sh "$RECIPIENT_KEY_NAME" || return
+    bash ./scripts/injectived/create-test-wallet.sh "$RECIPIENT_KEY_NAME" || return
   fi
 
   sender_addr="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")" || return
@@ -145,7 +145,7 @@ export RECIPIENT_ADDR="${RECIPIENT_ADDR:-$MY_ADDR}"
 空文字の引数や空の `KEY_NAME` が明示されている場合は、別の鍵に置き換えずエラーで停止する。`KEYRING_BACKEND` の既定値は `test` である。
 
 ```bash
-./scripts/injectived/create-test-wallet.sh testwallet
+bash ./scripts/injectived/create-test-wallet.sh testwallet
 ```
 
 スクリプトが実行する鍵の確認・作成とアドレス取得は次のとおりである。
@@ -194,7 +194,7 @@ injectived query bank balances "$MY_ADDR" \
 ```bash
 export AMOUNT="1000000000000000inj"
 export BANK_SEND_GAS=200000
-CONFIRM_SEND=yes ./scripts/injectived/bank-send.sh
+CONFIRM_SEND=yes bash ./scripts/injectived/bank-send.sh
 ```
 
 返された TxHash を控え、次の手順で送金結果を確認する。
@@ -319,7 +319,7 @@ export SUBDENOM="mtk"
 export CREATOR_ADDR="$MY_ADDR"
 export DENOM="factory/${CREATOR_ADDR}/${SUBDENOM}"
 source scripts/tokenfactory/load-env.sh
-CONFIRM_TX=yes ./setup/normal/07-tokenfactory-mtk.sh create-denom
+CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh create-denom
 ```
 
 ```bash
@@ -332,7 +332,7 @@ check_tx "denom作成で返されたTxHash"
 [公式 v1.18.0 の CLI](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/client/cli/tx.go#L219-L267) は末尾に `[decimals] [shouldDisableAdminBurn]` を取り、[公式ガイド](https://docs.injective.network/developers-defi/token-launch) は `[decimals]` のみの例を掲載している。補助スクリプトは `6 false` または `6` を渡し、どちらにも一致しない場合やヘルプ取得に失敗した場合は送信せず停止する。
 
 ```bash
-CONFIRM_TX=yes ./setup/normal/07-tokenfactory-mtk.sh set-metadata
+CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh set-metadata
 ```
 
 <details>
@@ -376,14 +376,14 @@ check_tx "メタデータ設定で返されたTxHash"
 小数桁数 `6` の場合、`1000000000` は `1000 MTK` に相当する。
 
 ```bash
-MINT_AMOUNT=1000000000 CONFIRM_TX=yes ./setup/normal/07-tokenfactory-mtk.sh mint
+MINT_AMOUNT=1000000000 CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh mint
 check_tx "MTKミントで返されたTxHash"
 ```
 
 ### 6.4. 残高を確認する
 
 ```bash
-./setup/normal/07-tokenfactory-mtk.sh balance
+bash ./setup/normal/07-tokenfactory-mtk.sh balance
 ```
 
 ### 6.5. MTK を送金し、受取先の残高を確認する
@@ -392,7 +392,7 @@ check_tx "MTKミントで返されたTxHash"
 
 ```bash
 export SEND_AMOUNT=1000000
-CONFIRM_TX=yes ./setup/normal/07-tokenfactory-mtk.sh send
+CONFIRM_TX=yes bash ./setup/normal/07-tokenfactory-mtk.sh send
 check_tx "MTK送金で返されたTxHash"
 injectived query bank balances "$RECIPIENT_ADDR" \
   --node="$NODE" --chain-id="$CHAIN_ID" --output json | jq
@@ -452,7 +452,7 @@ echo "DENOM=[$DENOM]"
 DENOM=[factory/inj.../mtk]
 ```
 
-`07-tokenfactory-mtk.sh env` は設定を画面に表示する操作であり、現在のシェルへの読み込みは `source` で行う。
+`bash ./setup/normal/07-tokenfactory-mtk.sh env` は設定を画面に表示する操作であり、現在のシェルへの読み込みは `source` で行う。
 
 #### denom の作成
 
@@ -544,7 +544,7 @@ export SENDER_ADDR="$MY_ADDR"
 export CREATOR_ADDR="$MY_ADDR"
 source scripts/CW20/load-env.sh
 printf '署名者: %s\nWASM: %s\n' "$SENDER_ADDR" "$WASM_PATH"
-CONFIRM_TX=yes ./setup/normal/11-store-cw20-code.sh
+CONFIRM_TX=yes bash ./setup/normal/11-store-cw20-code.sh
 ```
 
 CLI の実行確認が表示されたら、内容を確認して `y` を入力し、`Enter` を押す。
@@ -565,7 +565,7 @@ export CODE_ID="取得したcode_id"
 
 ```bash
 TOKEN_NAME="My Token" TOKEN_SYMBOL="MTK" TOKEN_DECIMALS=6 INITIAL_BALANCE=1000000 OUTPUT_FILE=instantiate_msg.json \
-  ./scripts/CW20/create-instantiate-msg.sh
+  bash ./scripts/CW20/create-instantiate-msg.sh
 jq . instantiate_msg.json
 ```
 
