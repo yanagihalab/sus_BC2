@@ -39,5 +39,6 @@ injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "$AMOUNT" \
   --node="$NODE" \
   --gas-prices="$GAS_PRICES" \
   --gas="$BANK_SEND_GAS" \
+  --output json \
   --broadcast-mode sync \
   -y

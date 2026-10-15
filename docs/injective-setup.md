@@ -6,7 +6,7 @@
 本書のコマンドは、特に指定がない限り、Kali Linux のターミナルでリポジトリルートから実行する。パスは標準配置の例であり、作業先を変更した場合は読み替える。
 
 以下は同じ Bash セッションで、番号順に実行する。最初の `bash` で Bash を起動する。初期設定では、送信元・受取先の両方に自分の `testwallet` を使用する。作成済みのウォレットを使う場合は、その鍵名を指定する。新しいウォレットを作る場合は、未使用の鍵名を指定する。
-書き込み操作ごとに返された TxHash を照会し、ブロックへの取り込みと `code: 0` を確認してから次へ進む。Faucet での入金はブラウザで行う。手順 6 以降の TxHash・code ID・コントラクトアドレスは、コマンドの実行結果から自動で設定する。
+書き込み操作ごとに返された TxHash を照会し、ブロックへの取り込みと `code: 0` を確認してから次へ進む。Faucet での入金はブラウザで行う。手順 4 以降の TxHash・code ID・コントラクトアドレスは、コマンドの実行結果から自動で設定する。
 
 ## 1. 接続設定を読み込む
 
@@ -136,35 +136,41 @@ echo "RECIPIENT_ADDR=$RECIPIENT_ADDR"
 表示されたアドレスを確認してから、送金する。
 
 ```bash
+set -euo pipefail
+unset INJ_SEND_TX_HASH TX_HASH TX_RESULT
+source scripts/injectived/tx-utils.sh
 export AMOUNT="1000000000000000inj"
 export BANK_SEND_GAS=200000
-CONFIRM_SEND=yes bash ./scripts/injectived/bank-send.sh
+run_tx --hash-var INJ_SEND_TX_HASH env CONFIRM_SEND=yes bash ./scripts/injectived/bank-send.sh
+echo "INJ_SEND_TX_HASH=$INJ_SEND_TX_HASH"
 ```
 
-返された TxHash を控え、次の手順で送金結果を確認する。この受取先の設定は後続の TokenFactory・CW20 の送金にも引き継がれる。
+`run_tx` が送金結果の TxHash を取得して確定成功を確認し、`INJ_SEND_TX_HASH` に自動で保存する。手順 5 ではこの値を使うため、TxHash の転記は不要である。送金が失敗した場合は次へ進まず、確定待ちがタイムアウトした場合も同じ送金を繰り返さず、[確定待ちの再開手順](#送信後に確定待ちがタイムアウトした)で照会する。
+この受取先の設定は後続の TokenFactory・CW20 の送金にも引き継がれる。
 
 <details>
-<summary>補足：bank-send.sh が実行する送金コマンド</summary>
+<summary>補足：送金コマンドと TxHash の自動取得</summary>
 
-送信元の鍵、手順 4 で設定した受取アドレス、送金量を使って、次のコマンドを実行する。
+`bank-send.sh` は送信元の鍵、手順 4 で設定した受取アドレス、送金量を使って `injectived tx bank send` を実行する。補助スクリプトの代わりに直接 CLI を使う場合も、次のように `run_tx` で実行すると同じ変数に TxHash が保存される。
 
 ```bash
 AMOUNT="1000000000000000inj"
 BANK_SEND_GAS="${BANK_SEND_GAS:-${GAS:-200000}}"
-injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "$AMOUNT" \
+run_tx --hash-var INJ_SEND_TX_HASH injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "$AMOUNT" \
   --from="$KEY_NAME" \
   --keyring-backend "$KEYRING_BACKEND" \
   --chain-id="$CHAIN_ID" \
   --node="$NODE" \
   --gas-prices="$GAS_PRICES" \
   --gas="$BANK_SEND_GAS" \
+  --output json \
   --broadcast-mode sync \
   -y
 ```
 
 `--from` は署名に使う鍵、`--chain-id` と `--node` は接続先を指定する。
 `--gas-prices` と `--gas` は手数料計算に使う設定である。送金には `BANK_SEND_GAS` を使う。
-`--broadcast-mode sync` はトランザクションを送信して応答を受け取る方式で、ブロックへの取り込み結果は TxHash で別途確認する。
+`--output json` は TxHash を自動取得できる形式で応答を出力する。`--broadcast-mode sync` は送信の受付結果を返し、その後 `run_tx` が TxHash を使ってブロックへの取り込みと成功を自動で確認する。
 `-y` は CLI の確認を自動承認する指定である。
 `CONFIRM_SEND=yes` は補助スクリプト内の実行条件であり、直接 `injectived` を実行する場合のオプションではない。
 `inj` は INJ の最小単位で、`1000000000000000000inj` が `1 INJ` に相当する。この例の `1000000000000000inj` は `0.001 INJ` である。送金量は使用する `AMOUNT` の値で指定する。
@@ -221,29 +227,21 @@ tx: null
 txhash: 記録のTxHash
 ```
 
-この応答はブロードキャスト時の記録であり、ブロックへの取り込み後の確定結果ではない。送金結果は、手順 5 のトランザクション確認に従って別途確認する。
+この応答はブロードキャスト時の過去の記録であり、ブロックへの取り込み後の確定結果ではない。現行の手順 4 は `run_tx` で確定成功まで確認し、手順 5 でも保存済みの TxHash を使って結果を再確認する。
 
 </details>
 
 ## 5. トランザクションの成功を確認する
 
-送金、TokenFactory、CW20 などの書き込み操作で TxHash が返ったら、次のコマンドで結果を確認する。
-ブロックに取り込まれ、`code` が `0` であることを確認する。
-`--broadcast-mode sync` の応答で `code: 0` と TxHash が返っても、`height: "0"` であれば確定成功を示すものではない。ブロックへの取り込み後、TxHash で結果を確認する。
+手順 4 と同じ Bash セッションで、保存された `INJ_SEND_TX_HASH` を使って送金結果を再確認する。TxHash の手入力は不要である。`wait_tx` は照会だけを行い、送金は再実行しない。
+ブロックへの取り込み後の `height` が正の整数、`code` が `0` である場合だけ成功とする。`--broadcast-mode sync` の受付応答で `code: 0` と TxHash が返っても、`height: "0"` は確定成功を示さない。
 
 ```bash
-check_tx() {
-  local tx_result
-  tx_result="$(injectived q tx "$1" \
-    --chain-id="$CHAIN_ID" \
-    --node="$NODE" \
-    --output json)" || return
-  printf '%s\n' "$tx_result" | jq
-}
-check_tx "INJ送金で返されたTxHash"
+source scripts/injectived/tx-utils.sh
+wait_tx "$INJ_SEND_TX_HASH"
 ```
 
-`check_tx` の引数は、その操作で返された実際の TxHash に置き換える。まだ見つからない場合は、数秒待って同じコマンドを再実行する。手順 6 以降では、次節の `run_tx` で TxHash の取得と確定結果の確認を自動化する。
+照会は既定で2秒間隔・最大30回行う。送信や確定確認に失敗した場合、手順 4 では古い `INJ_SEND_TX_HASH` を消去して停止するため、前回の送金結果を今回の結果として使わない。別の取引で `TX_HASH` が更新されても、この手順は INJ 送金専用の `INJ_SEND_TX_HASH` を使う。
 
 トランザクションは、次の Explorer でも確認できる。
 
@@ -263,6 +261,7 @@ source scripts/injectived/tx-utils.sh
 
 | 操作 | 保存する環境変数 |
 | --- | --- |
+| INJ 送金 | `INJ_SEND_TX_HASH` |
 | denom 作成 | `CREATE_DENOM_TX_HASH` |
 | メタデータ設定 | `METADATA_TX_HASH` |
 | TokenFactory のミント・送金 | `TOKENFACTORY_MINT_TX_HASH`・`TOKENFACTORY_SEND_TX_HASH` |
@@ -794,4 +793,5 @@ wait_tx "$TX_HASH"
 ```
 
 Bash を開き直した場合は接続設定を読み込み、タイムアウト時に表示された今回の TxHash を `wait_tx` の引数に指定する。古い `STORE_TX_HASH` や別の取引の TxHash を流用しない。
-成功が確認できたら、WASM 登録後は手順 7.2、コントラクト初期化後は手順 7.5 から再開する。`wait_tx` の照会には手数料はかからず、WASM 登録や初期化を再送しない。
+INJ 送金の確定成功が確認できた場合は、その照会で手順 5 の確認も完了するため、手順 6 へ進む。タイムアウト時には `INJ_SEND_TX_HASH` が未設定なので、手順 5 をそのまま再実行しない。
+WASM 登録後は手順 7.2、コントラクト初期化後は手順 7.5 から再開する。`wait_tx` の照会には手数料はかからず、送金・WASM 登録・初期化を再送しない。

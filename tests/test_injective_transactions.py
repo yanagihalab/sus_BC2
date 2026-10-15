@@ -126,11 +126,12 @@ capture_tx_state() {
   printf '\\n__TX_TEST_STATE__\\n'
   jq -nc --arg hash "${TX_HASH-}" --arg result "${TX_RESULT-}" \\
     --arg event "${EVENT_VALUE-}" --arg code_id "${CODE_ID-}" --arg contract "${CONTRACT_ADDR-}" \\
+    --arg inj_hash "${INJ_SEND_TX_HASH-}" \\
     --arg create_hash "${CREATE_DENOM_TX_HASH-}" --arg metadata_hash "${METADATA_TX_HASH-}" \\
     --arg tf_mint_hash "${TOKENFACTORY_MINT_TX_HASH-}" --arg tf_send_hash "${TOKENFACTORY_SEND_TX_HASH-}" \\
     --arg store_hash "${STORE_TX_HASH-}" --arg instantiate_hash "${INSTANTIATE_TX_HASH-}" \\
     --arg send_hash "${CW20_SEND_TX_HASH-}" --arg mint_hash "${CW20_MINT_TX_HASH-}" \\
-    '{hash:$hash,result:$result,event:$event,code_id:$code_id,contract:$contract,hashes:[$create_hash,$metadata_hash,$tf_mint_hash,$tf_send_hash,$store_hash,$instantiate_hash,$send_hash,$mint_hash]}'
+    '{hash:$hash,result:$result,event:$event,code_id:$code_id,contract:$contract,inj_hash:$inj_hash,hashes:[$create_hash,$metadata_hash,$tf_mint_hash,$tf_send_hash,$store_hash,$instantiate_hash,$send_hash,$mint_hash]}'
   exit "$tx_test_status"
 }
 trap capture_tx_state EXIT
@@ -168,6 +169,14 @@ trap capture_tx_state EXIT
         wasm = self.directory / "sample.wasm"
         wasm.write_bytes(b"mock wasm")
         return workspace, wasm
+
+    def document_bank_program(self, *, replace_generic_hash=False):
+        sending = self.document_main_program("## 4.")
+        recipient_setting = 'export RECIPIENT_ADDR="inj1..."'
+        self.assertIn(recipient_setting, sending)
+        sending = sending.replace(recipient_setting, 'export RECIPIENT_ADDR="$MOCK_RECIPIENT"')
+        between = 'export TX_HASH="$OTHER_TX_HASH"\n' if replace_generic_hash else ""
+        return sending + between + self.document_main_program("## 5.")
 
     def calls(self):
         return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
@@ -454,6 +463,56 @@ trap capture_tx_state EXIT
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("CONFIRM_TX=yes", result.stdout + result.stderr)
                 self.assertEqual(self.calls(), [])
+
+    def test_documented_inj_send_and_confirmation_use_the_operation_hash(self):
+        workspace, _ = self.transaction_workspace()
+        for replace_generic_hash in (False, True):
+            with self.subTest(replace_generic_hash=replace_generic_hash):
+                self.configure()
+                program = self.document_bank_program(replace_generic_hash=replace_generic_hash)
+                self.assertNotIn("返されたTxHash", program)
+                result, state = self.run_shell(
+                    program, cwd=workspace, MOCK_RECIPIENT=RECIPIENT, OTHER_TX_HASH=OTHER_HASH,
+                    KEY_NAME="testwallet", KEYRING_BACKEND="test", GAS_PRICES="500000000inj",
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(state["inj_hash"], HASH)
+                self.assertEqual(state["hash"], HASH)
+                self.assertEqual(len(self.sends()), 1)
+                self.assertEqual([call[2] for call in self.queries()], [HASH, HASH])
+                sending = self.sends()[0]
+                self.assertEqual(sending[:6], ["tx", "bank", "send", "testwallet", RECIPIENT, "1000000000000000inj"])
+                self.assertIn("--gas=200000", sending)
+                self.assertEqual(sending[-5:], ["--output", "json", "--broadcast-mode", "sync", "-y"])
+
+    def test_failed_inj_send_clears_old_hash_and_stops_before_step_five(self):
+        workspace, _ = self.transaction_workspace()
+        for configuration, expected_status, query_count in (
+            ({"broadcast": {"output": "", "status": 42}}, 42, 0),
+            ({"queries": [{"output": confirmed(code=9)}]}, 1, 1),
+        ):
+            with self.subTest(configuration=configuration):
+                self.configure(**configuration)
+                result, state = self.run_shell(
+                    self.document_bank_program(), cwd=workspace, MOCK_RECIPIENT=RECIPIENT,
+                    KEY_NAME="testwallet", KEYRING_BACKEND="test", GAS_PRICES="500000000inj",
+                    INJ_SEND_TX_HASH=OTHER_HASH, TX_HASH=OTHER_HASH, TX_RESULT="stale",
+                )
+                self.assertEqual(result.returncode, expected_status, result.stderr)
+                self.assert_failed_without_result(result, state)
+                self.assertEqual(state["inj_hash"], "")
+                self.assertEqual(len(self.queries()), query_count)
+
+    def test_bank_confirmation_gate_prevents_sending_and_saving_a_hash(self):
+        result, state = self.run_shell(
+            'source "$TX_HELPER"\nrun_tx --hash-var INJ_SEND_TX_HASH bash "$BANK_SCRIPT"',
+            TX_HELPER=str(HELPER), BANK_SCRIPT=str(ROOT / "scripts/injectived/bank-send.sh"),
+            RECIPIENT_ADDR=RECIPIENT, INJ_SEND_TX_HASH=OTHER_HASH,
+        )
+        self.assert_failed_without_result(result, state, sends=0)
+        self.assertEqual(state["inj_hash"], "")
+        self.assertIn("CONFIRM_SEND=yes", result.stdout + result.stderr)
+        self.assertEqual(self.calls(), [])
 
     def test_store_uses_json_sync_and_automatic_cli_confirmation(self):
         wasm = self.directory / "sample.wasm"
