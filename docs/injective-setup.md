@@ -622,7 +622,14 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 
 ### 7.7. CW20 トークンを送金する
 
-宛先は手順 4 で設定した `RECIPIENT_ADDR` を使う。
+CW20 トークンの受取アドレスを設定する。
+
+```bash
+# 二重引用符の間に実際の受取アドレスを入力してから実行する。
+export RECIPIENT_ADDR=""
+```
+
+設定した宛先へ送金する。
 
 ```bash
 # CW20 の送金量を最小単位で指定する。必要に応じて値を変更する。
@@ -638,6 +645,8 @@ injectived tx wasm execute "$CONTRACT_ADDR" \
 # CW20 の送金で返された TxHash を、二重引用符の間に入力してから実行する。
 check_tx ""
 ```
+
+送金の成功を確認したら、受取アドレス（`RECIPIENT_ADDR`）の CW20 トークン残高を確認する。
 
 ```bash
 injectived q wasm contract-state smart "$CONTRACT_ADDR" \
