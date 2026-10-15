@@ -5,25 +5,29 @@
 
 本書のコマンドは、特に指定がない限り、Kali Linux のターミナルでリポジトリルートから実行する。パスは標準配置の例であり、作業先を変更した場合は読み替える。
 
-以下は同じ Bash セッションで、番号順に実行する。最初の `bash` で Bash を起動する。送信元に `testwallet`、受取先に `receiverwallet` を使用する。既存の同名ウォレットは再利用され、新しいウォレットを作る場合は鍵名を変更する。
+以下は同じ Bash セッションで、番号順に実行する。最初の `bash` で Bash を起動する。初期設定では、送信元・受取先の両方に自分の `testwallet` を使用する。既存の同名ウォレットは再利用され、新しいウォレットを作る場合は鍵名を変更する。
 書き込み操作ごとに返された TxHash を照会し、ブロックへの取り込みと `code: 0` を確認してから次へ進む。Faucet での入金はブラウザで行い、コード中の TxHash・code ID・コントラクトアドレスは、その操作の実際の結果に置き換える。
 
 ## 1. 接続設定を読み込む
 
 接続先と鍵名を明示し、前の実行のアドレス・識別子を引き継がないようにする。
+まず次の1行だけを実行し、Bash のプロンプトが表示されてから、その下の設定ブロックを実行する。
 
 ```bash
 bash
+```
+
+```bash
 cd ~/temp/sus_BC2
 export KEY_NAME="testwallet"
-export RECIPIENT_KEY_NAME="receiverwallet"
+export RECIPIENT_KEY_NAME="$KEY_NAME"
 export KEYRING_BACKEND="test"
 export CHAIN_ID="injective-888"
 export NODE="https://injective-testnet-rpc.publicnode.com:443"
 export GAS_PRICES="500000000inj"
 export GAS=1000000
 export BANK_SEND_GAS=200000
-unset MY_ADDR ADDR CREATOR_ADDR SENDER_ADDR DENOM CODE_ID CONTRACT_ADDR
+unset MY_ADDR ADDR RECIPIENT_ADDR CREATOR_ADDR SENDER_ADDR DENOM CODE_ID CONTRACT_ADDR
 source scripts/injectived/load-env.sh
 ```
 
@@ -31,21 +35,75 @@ source scripts/injectived/load-env.sh
 
 ## 2. ウォレットを作成し、アドレスを取得する
 
-送信元と受取先のウォレットを作成する。補助スクリプトは、指定した鍵が存在しない場合に `injectived keys add` を実行する。
-2つ目のコマンドの `KEY_NAME` は、そのコマンドにだけ適用される。
+自分のウォレットを作成し、そのアドレスを送信元と受取先に設定する。初期設定では受取用の別ウォレットは作成しない。補助スクリプトには鍵名を引数で渡し、指定した鍵が存在しない場合だけ `injectived keys add` を実行する。
+次のブロックは、Bash で手順 2 だけを実行した場合も、未設定または空の鍵名・keyring backend を既定値で補う。手順 1 で指定した値があれば、その値を使う。
 
 ```bash
-./scripts/injectived/create-test-wallet.sh
-KEY_NAME="$RECIPIENT_KEY_NAME" ./scripts/injectived/create-test-wallet.sh
+prepare_wallets() {
+  local sender_addr recipient_addr
+  cd ~/temp/sus_BC2 || return
+  export KEY_NAME="${KEY_NAME:-testwallet}"
+  export RECIPIENT_KEY_NAME="${RECIPIENT_KEY_NAME:-$KEY_NAME}"
+  export KEYRING_BACKEND="${KEYRING_BACKEND:-test}"
+  unset MY_ADDR ADDR RECIPIENT_ADDR
 
-export MY_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
-export ADDR="$MY_ADDR"
-export RECIPIENT_ADDR="$(injectived keys show "$RECIPIENT_KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
-injectived keys list --keyring-backend "$KEYRING_BACKEND"
-printf '送信元: %s\n受取先: %s\n' "$MY_ADDR" "$RECIPIENT_ADDR"
+  ./scripts/injectived/create-test-wallet.sh "$KEY_NAME" || return
+  if [ "$RECIPIENT_KEY_NAME" != "$KEY_NAME" ]; then
+    ./scripts/injectived/create-test-wallet.sh "$RECIPIENT_KEY_NAME" || return
+  fi
+
+  sender_addr="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")" || return
+  if [ "$RECIPIENT_KEY_NAME" = "$KEY_NAME" ]; then
+    recipient_addr="$sender_addr"
+  else
+    recipient_addr="$(injectived keys show "$RECIPIENT_KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")" || return
+  fi
+  if [ -z "${sender_addr//[[:space:]]/}" ] || [ -z "${recipient_addr//[[:space:]]/}" ]; then
+    echo "アドレスを取得できませんでした。鍵名と keyring backend を確認してください。" >&2
+    return 1
+  fi
+  injectived keys list --keyring-backend "$KEYRING_BACKEND" || return
+  export MY_ADDR="$sender_addr" ADDR="$sender_addr" RECIPIENT_ADDR="$recipient_addr"
+  source scripts/injectived/load-env.sh || return
+  printf '送信元: %s\n受取先: %s\n' "$MY_ADDR" "$RECIPIENT_ADDR"
+}
+prepare_wallets
 ```
 
-作成された鍵を使って、後続の送金・トークン作成・コントラクト操作を行う。
+すべて成功した場合だけ、取得したアドレスを現在のシェルへ設定する。初期設定では `RECIPIENT_ADDR` と `MY_ADDR` が同じ値になり、INJ・TokenFactory・CW20 の送金先に自分のアドレスを使用する。途中のコマンドが失敗した場合は、アドレスの表示や後続の処理へ進まず停止する。
+作成された鍵を使って、後続の送金・トークン作成・コントラクト操作を行う。新しいターミナルを開いた場合は、手順 1・2 を実行し直す。
+
+### 2.1. 受取ウォレットを設定する
+
+手順 2 が成功した同じ Bash セッションで実行する。初期設定の受取先は自分のウォレットであり、次のコマンドで自分宛に設定し直し、設定値を確認できる。
+
+```bash
+export RECIPIENT_KEY_NAME="${KEY_NAME:?先に手順2を実行してください}" \
+       RECIPIENT_ADDR="${MY_ADDR:?先に手順2を実行してください}" &&
+  printf '受取先の鍵名: %s\n受取先アドレス: %s\n' "$RECIPIENT_KEY_NAME" "$RECIPIENT_ADDR"
+```
+
+`RECIPIENT_KEY_NAME` は受取先の鍵名、`RECIPIENT_ADDR` は実際の送金先アドレスである。後続の INJ・TokenFactory・CW20 の送金では、この `RECIPIENT_ADDR` を使う。
+鍵名や自分のアドレスが未設定の場合は、手順 2 を実行するよう案内して設定を中止する。別のウォレットを受取先にする場合は、次の補足のコマンドを実行する。
+
+<details>
+<summary>補足：別のウォレットを受取先にする場合</summary>
+
+手順 2 の関数を定義した後、受取先の鍵名を変更して実行する。受取先の鍵が存在しない場合だけ作成し、そのアドレスを `RECIPIENT_ADDR` に設定する。
+
+```bash
+export RECIPIENT_KEY_NAME="receiverwallet"
+prepare_wallets
+```
+
+自分のウォレットを受取先に戻す場合は、次を実行する。
+
+```bash
+export RECIPIENT_KEY_NAME="$KEY_NAME"
+prepare_wallets
+```
+
+</details>
 
 <details>
 <summary>補足：環境変数の読み込みとウォレット作成のコマンド</summary>
@@ -64,7 +122,6 @@ export GAS_PRICES="${GAS_PRICES:-500000000inj}"
 export GAS="${GAS:-1000000}"
 export BANK_SEND_GAS="${BANK_SEND_GAS:-200000}"
 export AMOUNT="${AMOUNT:-100000000inj}"
-export RECIPIENT_ADDR="${RECIPIENT_ADDR:-}"
 export KEYRING_BACKEND="${KEYRING_BACKEND:-test}"
 
 if command -v injectived >/dev/null 2>&1; then
@@ -73,16 +130,25 @@ else
   export MY_ADDR="${MY_ADDR:-}"
 fi
 export ADDR="${ADDR:-$MY_ADDR}"
+export RECIPIENT_ADDR="${RECIPIENT_ADDR:-$MY_ADDR}"
 ```
 
 `KEY_NAME` は使用する鍵の名前、`CHAIN_ID` と `NODE` は接続先、`GAS_PRICES` はガス単価である。
-`GAS` はガス上限、`BANK_SEND_GAS` は INJ 送金用のガス上限、`AMOUNT` は送金量、`RECIPIENT_ADDR` は送金先を表す。
+`GAS` はガス上限、`BANK_SEND_GAS` は INJ 送金用のガス上限、`AMOUNT` は送金量、`RECIPIENT_ADDR` は送金先を表す。送金先が未設定または空の場合は、自分の `MY_ADDR` を使う。明示した送金先は保持される。
 `KEYRING_BACKEND` は鍵の保存方式を指定する。`keys show -a` は、鍵に対応するアドレスを取得する。
 鍵がまだない場合、アドレスは空のままとなるため、作成後に取得する。
 
 #### ウォレットの作成とアドレス取得
 
 `create-test-wallet.sh` は、同じ名前の鍵が存在するか確認し、未作成の場合だけウォレットを作成する。
+鍵名は第1引数で指定でき、`KEY_NAME` より優先される。どちらも未設定なら `testwallet` を使う。
+空文字の引数や空の `KEY_NAME` が明示されている場合は、別の鍵に置き換えずエラーで停止する。`KEYRING_BACKEND` の既定値は `test` である。
+
+```bash
+./scripts/injectived/create-test-wallet.sh testwallet
+```
+
+スクリプトが実行する鍵の確認・作成とアドレス取得は次のとおりである。
 
 ```bash
 if ! injectived keys show "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" >/dev/null 2>&1; then
@@ -91,6 +157,10 @@ else
   echo "Wallet already exists: $KEY_NAME"
 fi
 MY_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
+if [ -z "${MY_ADDR//[[:space:]]/}" ]; then
+  echo "Could not obtain an address for KEY_NAME=$KEY_NAME (KEYRING_BACKEND=$KEYRING_BACKEND)." >&2
+  exit 1
+fi
 ```
 
 作成済みの鍵を一覧で確認し、使用する鍵のアドレスを取得する場合は、次を実行する。
@@ -101,7 +171,8 @@ injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND"
 ```
 
 `keys add` は鍵とウォレットを作成する。作成後の `MY_ADDR` を Faucet や残高照会に使用する。
-この手動例では現在のシェルにアドレスが設定される。補助スクリプトを実行した場合は、表示される案内に従って環境変数を読み込む。
+補助スクリプトは別のプロセスとして実行されるため、その中の変数は呼び出し元のシェルへ反映されない。単独で使用した場合は、表示される `export` と `source` の案内を現在の Bash で実行する。
+手順 2 の関数は、鍵名・keyring backend を明示し、アドレス取得の成功を確認してから `export` する。`export MY_ADDR="$(injectived ...)"` のように一度に書くと CLI の失敗を `export` の成功で隠すため、代入と `export` を分けている。
 
 </details>
 
@@ -116,9 +187,9 @@ injectived query bank balances "$MY_ADDR" \
   --node="$NODE" --chain-id="$CHAIN_ID" --output json | jq
 ```
 
-## 4. 受取先ウォレットへ INJ を送金する
+## 4. 自分のウォレットへ INJ を送金する
 
-手順 2 で取得した `RECIPIENT_ADDR` へ `0.001 INJ` を送金する。別の宛先へ送る場合は、実行前に `RECIPIENT_ADDR` を実際のアドレスへ変更する。
+手順 2 で設定した `RECIPIENT_ADDR` へ `0.001 INJ` を送金する。初期設定の宛先は自分の `MY_ADDR` である。別の宛先へ送る場合は、手順 2 の補足で受取用ウォレットを指定するか、実行前に `RECIPIENT_ADDR` を実際のアドレスへ変更する。
 
 ```bash
 export AMOUNT="1000000000000000inj"
@@ -131,10 +202,10 @@ CONFIRM_SEND=yes ./scripts/injectived/bank-send.sh
 <details>
 <summary>補足：bank-send.sh が実行する送金コマンド</summary>
 
-送信元の鍵、送金先、送金量を指定して、次のコマンドを実行する。例の送金先は実際のアドレスに置き換える。
+送信元の鍵、送金先、送金量を指定して、次のコマンドを実行する。初期設定では自分のアドレスを指定する。
 
 ```bash
-RECIPIENT_ADDR="inj1送金先アドレス"
+RECIPIENT_ADDR="${RECIPIENT_ADDR:-$MY_ADDR}"
 AMOUNT="100000000inj"
 BANK_SEND_GAS="${BANK_SEND_GAS:-${GAS:-200000}}"
 injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "$AMOUNT" \
@@ -257,8 +328,17 @@ check_tx "denom作成で返されたTxHash"
 
 ### 6.2. メタデータを設定する
 
-現行の補助スクリプトの `set-metadata` は末尾に `10 6` を渡すため、ここでは CLI を直接使う。
-[公式 v1.18.0 の CLI](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/client/cli/tx.go#L219-L267) は末尾に `[decimals] [shouldDisableAdminBurn]` を取り、[公式ガイド](https://docs.injective.network/developers-defi/token-launch) は `[decimals]` のみの例を掲載している。次の関数は、使用中の CLI の Usage を確認して `6 false` または `6` を選ぶ。どちらにも一致しない場合は送信せず停止する。
+`set-metadata` は、使用中の CLI の Usage を確認して、小数桁数 `6` に合う末尾引数を選ぶ。
+[公式 v1.18.0 の CLI](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/client/cli/tx.go#L219-L267) は末尾に `[decimals] [shouldDisableAdminBurn]` を取り、[公式ガイド](https://docs.injective.network/developers-defi/token-launch) は `[decimals]` のみの例を掲載している。補助スクリプトは `6 false` または `6` を渡し、どちらにも一致しない場合やヘルプ取得に失敗した場合は送信せず停止する。
+
+```bash
+CONFIRM_TX=yes ./setup/normal/07-tokenfactory-mtk.sh set-metadata
+```
+
+<details>
+<summary>補足：メタデータ設定を CLI で直接実行する場合</summary>
+
+補助スクリプトの代わりに次の関数を実行できる。補助スクリプトと同じ判定で引数を選ぶ。
 
 ```bash
 set_token_metadata() {
@@ -266,9 +346,9 @@ set_token_metadata() {
   local metadata_args
   metadata_help="$(injectived tx tokenfactory set-denom-metadata --help)" || return
   printf '%s\n' "$metadata_help"
-  if printf '%s\n' "$metadata_help" | grep -Fq '[shouldDisableAdminBurn]'; then
+  if grep -Fq '[shouldDisableAdminBurn]' <<< "$metadata_help"; then
     metadata_args=(6 false)
-  elif printf '%s\n' "$metadata_help" | grep -Eq 'set-denom-metadata .*\[decimals\]([[:space:]]+\[flags\])?[[:space:]]*$'; then
+  elif grep -Eq 'set-denom-metadata .*\[decimals\]([[:space:]]+\[flags\])?[[:space:]]*$' <<< "$metadata_help"; then
     metadata_args=(6)
   else
     echo "Usage の位置引数を確認してからメタデータを設定してください。" >&2
@@ -284,6 +364,8 @@ set_token_metadata() {
 }
 set_token_metadata
 ```
+
+</details>
 
 ```bash
 check_tx "メタデータ設定で返されたTxHash"
@@ -306,6 +388,8 @@ check_tx "MTKミントで返されたTxHash"
 
 ### 6.5. MTK を送金し、受取先の残高を確認する
 
+初期設定では自分のウォレットへ送金する。宛先は手順 2 で設定した `RECIPIENT_ADDR` を使う。
+
 ```bash
 export SEND_AMOUNT=1000000
 CONFIRM_TX=yes ./setup/normal/07-tokenfactory-mtk.sh send
@@ -327,7 +411,6 @@ TokenFactory 用の `load-env.sh` は、次の固有設定を読み込む。
 ```bash
 export GAS="${GAS:-300000}"
 export SUBDENOM="${SUBDENOM:-mtk}"
-export RECIPIENT_ADDR="${RECIPIENT_ADDR:-}"
 export SEND_AMOUNT="${SEND_AMOUNT:-1000000}"
 if command -v injectived >/dev/null 2>&1; then
   export CREATOR_ADDR="${CREATOR_ADDR:-$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND" 2>/dev/null || true)}"
@@ -339,10 +422,12 @@ if [ -n "$CREATOR_ADDR" ]; then
 else
   export DENOM="${DENOM:-}"
 fi
+export RECIPIENT_ADDR="${RECIPIENT_ADDR:-$CREATOR_ADDR}"
 ```
 
 `CREATOR_ADDR` は作成者のアドレス、`SUBDENOM` はトークン名の末尾部分である。
 完全な denom は `factory/作成者アドレス/subdenom` の形式になる。
+`RECIPIENT_ADDR` が未設定または空の場合は、自分の `CREATOR_ADDR` を送金先とする。明示した送金先は保持される。
 補助スクリプトの各操作では、鍵からアドレスを取得し、denom を組み立て直す。
 以下の手動例も、使用する鍵から値を取得する。ガス上限の例は `300000` とする。
 
@@ -389,19 +474,18 @@ injectived tx tokenfactory create-denom \
 
 #### メタデータの設定
 
-名称、説明、表示単位などを登録する。実行には手順 6.2 の CLI 例を使用する。
+名称、説明、表示単位などを登録する。実行には手順 6.2 の `set-metadata` または CLI の直接実行例を使用する。
 
 単位の JSON では、最小単位の exponent を `0`、表示単位 `MTK` の exponent を `6` としている。
-現行スクリプトの末尾引数 `10 6` には、CLI の仕様との確認が必要である。
 [公式の公開ソース v1.18.0](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/client/cli/tx.go#L219-L267) では、末尾2引数は `decimals` と `shouldDisableAdminBurn` である。
-この仕様で `10 6` を渡すと、小数桁数は `10`、管理者の burn の無効化は `false`（文字列 `true` の場合だけ有効）として扱われ、作成時と単位 JSON の `6` 桁設定に一致しない。
-[公式のトークン作成ガイド](https://docs.injective.network/developers-defi/token-launch) には9引数の例もあるため、実行前に使用中の CLI の引数を次のコマンドで確認する。
+この仕様では末尾に `6 false` を渡し、小数桁数を `6`、管理者の burn の無効化を `false` とする。
+[公式のトークン作成ガイド](https://docs.injective.network/developers-defi/token-launch) の9引数の例では、末尾に `6` のみを渡す。補助スクリプトは、次のコマンドの Usage を確認して引数を切り替える。
 
 ```bash
 injectived tx tokenfactory set-denom-metadata --help
 ```
 
-補助スクリプトの `set-metadata` の末尾引数は、使用する CLI の仕様に合わせた修正が必要である。手順 6.2 は、この操作だけ CLI を直接実行する。
+Usage に想定した末尾引数が見つからない場合は送信せず停止する。小数桁数と単位 JSON の exponent は、作成時の `6` 桁設定にそろえている。
 
 #### ミント・残高確認・送金
 
@@ -428,10 +512,10 @@ injectived query bank balances "$CREATOR_ADDR" \
   --node="$NODE" --chain-id="$CHAIN_ID" -o json | jq
 ```
 
-送金は、宛先と最小単位の数量を設定してから実行する。小数桁数が `6` の場合、既定の `SEND_AMOUNT=1000000` は `1 MTK` に相当する。
+送金は、宛先と最小単位の数量を設定してから実行する。初期設定の宛先は自分のアドレスである。小数桁数が `6` の場合、既定の `SEND_AMOUNT=1000000` は `1 MTK` に相当する。
 
 ```bash
-RECIPIENT_ADDR="inj1送金先アドレス"
+RECIPIENT_ADDR="${RECIPIENT_ADDR:-$CREATOR_ADDR}"
 SEND_AMOUNT="${SEND_AMOUNT:-1000000}"
 injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "${SEND_AMOUNT}${DENOM}" \
   --from="$KEY_NAME" \
@@ -520,6 +604,8 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 
 ### 7.7. CW20 トークンを送金する
 
+初期設定では自分のウォレットへ送金する。宛先は手順 2 で設定した `RECIPIENT_ADDR` を使う。
+
 ```bash
 export CW20_SEND_AMOUNT=1000000
 injectived tx wasm execute "$CONTRACT_ADDR" \
@@ -563,7 +649,6 @@ export CW_PLUS_DIR="${CW_PLUS_DIR:-$WORKDIR/cw-plus}"
 export WASM_PATH="${WASM_PATH:-$CW_PLUS_DIR/artifacts/cw20_base.wasm}"
 export CODE_ID="${CODE_ID:-}"
 export CONTRACT_ADDR="${CONTRACT_ADDR:-}"
-export RECIPIENT_ADDR="${RECIPIENT_ADDR:-}"
 export CW20_SEND_AMOUNT="${CW20_SEND_AMOUNT:-1000000}"
 export CW20_MINT_AMOUNT="${CW20_MINT_AMOUNT:-1000000}"
 if command -v injectived >/dev/null 2>&1; then
@@ -572,9 +657,11 @@ else
   export SENDER_ADDR="${SENDER_ADDR:-}"
 fi
 export MY_ADDR="${MY_ADDR:-$SENDER_ADDR}"
+export RECIPIENT_ADDR="${RECIPIENT_ADDR:-$SENDER_ADDR}"
 ```
 
 `WASM_PATH` はビルド済みコードの保存先である。
+`RECIPIENT_ADDR` が未設定または空の場合は、自分の `SENDER_ADDR` を送金先とする。明示した送金先は保持される。
 `11-store-cw20-code.sh` は、このファイルの存在と `CONFIRM_TX=yes` を確認した後、次の登録コマンドを実行する。
 以下の手動例では、コード登録用のガス上限を明示している。
 
@@ -638,10 +725,10 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 
 #### 送金
 
-送金先と送金量を設定してから実行する。数量は最小単位で指定し、decimals が `6` の場合、`1000000` が `1 MTK` に相当する。
+送金先と送金量を設定してから実行する。初期設定の宛先は自分のアドレスである。数量は最小単位で指定し、decimals が `6` の場合、`1000000` が `1 MTK` に相当する。
 
 ```bash
-RECIPIENT_ADDR="inj1送金先アドレス"
+RECIPIENT_ADDR="${RECIPIENT_ADDR:-$SENDER_ADDR}"
 CW20_SEND_AMOUNT="1000000"
 injectived tx wasm execute "$CONTRACT_ADDR" \
   '{"transfer":{"recipient":"'"$RECIPIENT_ADDR"'","amount":"'"$CW20_SEND_AMOUNT"'"}}' \

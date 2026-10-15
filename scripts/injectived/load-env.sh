@@ -17,7 +17,6 @@ export GAS_PRICES="${GAS_PRICES:-500000000inj}"
 export GAS="${GAS:-1000000}"
 export BANK_SEND_GAS="${BANK_SEND_GAS:-200000}"
 export AMOUNT="${AMOUNT:-100000000inj}"
-export RECIPIENT_ADDR="${RECIPIENT_ADDR:-}"
 export KEYRING_BACKEND="${KEYRING_BACKEND:-test}"
 
 if command -v injectived >/dev/null 2>&1; then
@@ -27,6 +26,7 @@ else
 fi
 
 export ADDR="${ADDR:-$MY_ADDR}"
+export RECIPIENT_ADDR="${RECIPIENT_ADDR:-$MY_ADDR}"
 
 cat <<EOF
 injectived environment loaded.

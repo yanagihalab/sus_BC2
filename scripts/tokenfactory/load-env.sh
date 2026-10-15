@@ -17,7 +17,6 @@ export GAS_PRICES="${GAS_PRICES:-500000000inj}"
 export GAS="${GAS:-300000}"
 export SUBDENOM="${SUBDENOM:-mtk}"
 export KEYRING_BACKEND="${KEYRING_BACKEND:-test}"
-export RECIPIENT_ADDR="${RECIPIENT_ADDR:-}"
 export SEND_AMOUNT="${SEND_AMOUNT:-1000000}"
 
 if command -v injectived >/dev/null 2>&1; then
@@ -31,6 +30,8 @@ if [ -n "$CREATOR_ADDR" ]; then
 else
   export DENOM="${DENOM:-}"
 fi
+
+export RECIPIENT_ADDR="${RECIPIENT_ADDR:-$CREATOR_ADDR}"
 
 cat <<EOF
 TokenFactory environment loaded.

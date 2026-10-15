@@ -21,7 +21,6 @@ export CW_PLUS_DIR="${CW_PLUS_DIR:-$WORKDIR/cw-plus}"
 export WASM_PATH="${WASM_PATH:-$CW_PLUS_DIR/artifacts/cw20_base.wasm}"
 export CODE_ID="${CODE_ID:-}"
 export CONTRACT_ADDR="${CONTRACT_ADDR:-}"
-export RECIPIENT_ADDR="${RECIPIENT_ADDR:-}"
 export CW20_SEND_AMOUNT="${CW20_SEND_AMOUNT:-1000000}"
 export CW20_MINT_AMOUNT="${CW20_MINT_AMOUNT:-1000000}"
 
@@ -32,6 +31,7 @@ else
 fi
 
 export MY_ADDR="${MY_ADDR:-$SENDER_ADDR}"
+export RECIPIENT_ADDR="${RECIPIENT_ADDR:-$SENDER_ADDR}"
 
 cat <<EOF
 CW20 environment loaded.

@@ -28,6 +28,7 @@ Required confirmation for write actions:
 Examples:
   $0 env
   CONFIRM_TX=yes $0 create-denom
+  CONFIRM_TX=yes $0 set-metadata
   MINT_AMOUNT=1000000000 CONFIRM_TX=yes $0 mint
   RECIPIENT_ADDR=inj1... SEND_AMOUNT=1000000 CONFIRM_TX=yes $0 send
 EOF
@@ -80,6 +81,16 @@ EOF
     require_confirm
     CREATOR_ADDR="$(creator_addr)"
     DENOM="factory/${CREATOR_ADDR}/${SUBDENOM}"
+    METADATA_HELP="$(injectived tx tokenfactory set-denom-metadata --help)"
+    if grep -Fq '[shouldDisableAdminBurn]' <<< "$METADATA_HELP"; then
+      METADATA_ARGS=(6 false)
+    elif grep -Eq 'set-denom-metadata .*\[decimals\]([[:space:]]+\[flags\])?[[:space:]]*$' <<< "$METADATA_HELP"; then
+      METADATA_ARGS=(6)
+    else
+      printf '%s\n' "$METADATA_HELP" >&2
+      echo "Unsupported set-denom-metadata Usage. Check the positional arguments before setting metadata." >&2
+      exit 1
+    fi
     injectived tx tokenfactory set-denom-metadata \
       "My Token Description" \
       "$DENOM" \
@@ -89,8 +100,7 @@ EOF
       "" \
       "" \
       "[{\"denom\":\"$DENOM\",\"exponent\":0,\"aliases\":[]},{\"denom\":\"MTK\",\"exponent\":6,\"aliases\":[]}]" \
-      10 \
-      6 \
+      "${METADATA_ARGS[@]}" \
       --from="$KEY_NAME" \
       --keyring-backend "$KEYRING_BACKEND" \
       --chain-id="$CHAIN_ID" \
