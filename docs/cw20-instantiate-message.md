@@ -1,7 +1,7 @@
 # CW20 初期化メッセージの作成
 
 本書は、CW20 コントラクトの初期化に渡す JSON ファイルの作成方法を説明する。
-CLI の設定とコントラクトへの操作は、[injectived の導入・操作手順](injective-setup.md) を参照する。
+CLI の設定とコントラクトへの操作は、[injectived の設定・操作手順](injective-setup.md) を参照する。
 以下のコマンドは、リポジトリルートから実行する。
 
 初期化メッセージ（instantiate message）は、次のシェルスクリプトで作成する。

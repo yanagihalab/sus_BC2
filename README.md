@@ -1,6 +1,6 @@
 # sus_BC2
 
-`injectived` の導入・設定・CLI 操作については、[docs/injective-setup.md](docs/injective-setup.md) を参照する。
+`injectived` の接続設定・CLI 操作については、[docs/injective-setup.md](docs/injective-setup.md) を参照する。
 
 ## 実行手順
 
@@ -76,12 +76,12 @@ cd ~/temp/sus_BC2
 | 4 | Visualizer の依存パッケージの導入 | `08-setup-proposer-visualizer.sh` で、`Day1/Proposer-visualizer` 内の `npm install` を実行する。Visualizer の起動は別途行う。 |
 | 5 | SSH サーバーの設定（任意） | `SETUP_SSH=yes` の場合だけ、`02-setup-vscode-ssh.sh` を実行する。処理順序の 2 で導入した OpenSSH の標準ポートを `2222` に設定する。パスワード認証を有効、root ログインを無効にし、SSH サービスを再起動する。 |
 | 6 | SimBlock の取得とビルド | `03-install-simblock.sh` で、導入済みのツールを確認し、SimBlock のリポジトリがなければ取得する。Java 11 の JDK を選択し、Gradle の `clean` と `build` を実行する。シミュレーションの実行は別途行う。 |
-| 7 | ブロックチェーン実験用 CLI の導入 | 導入内容と操作手順は [docs/injective-setup.md](docs/injective-setup.md) を参照する。 |
+| 7 | ブロックチェーン実験用 CLI の準備 | 一括セットアップで CLI を準備する。設定・操作は [docs/injective-setup.md](docs/injective-setup.md) を参照する。 |
 | 8 | Docker Engine の起動と確認 | `09-install-docker.sh` で、処理順序の 2 で導入した Docker のサービスを起動してバージョンを確認する。標準設定では Docker グループへのユーザー追加を省略し、`hello-world` も実行しない。 |
 | 9 | CW20 サンプルの WASM ビルド | `10-build-cw20-sample.sh` で Docker への接続を確認し、必要に応じて `sudo docker` を使う。`cw-plus` のリポジトリがなければ `--depth 1` で取得し、`cosmwasm/workspace-optimizer:0.17.0` に `./contracts/cw20-base` を指定してビルドする。古い WASM とチェックサムを削除してから、生成された `cw-plus/artifacts/cw20_base.wasm` が空でないこととチェックサムを確認する。 |
 | 10 | 完了メッセージと操作方法の表示 | リポジトリ、仮想環境、外部リポジトリ・ダウンロードの保存先を表示し、仮想環境を有効にするコマンドや、SSH 設定・各機能の省略方法を案内する。標準の外部リポジトリ・ダウンロード先はリポジトリの親ディレクトリ（本書の配置では `~/temp`）である。 |
 
-Visualizer、SimBlock、Docker、CW20 は、対応する `SETUP_*` に `no` を指定すると省略できる。Docker を省略する場合は `SETUP_DOCKER=no SETUP_CW20=no` を指定する。CLI の実行条件と省略方法は [docs/injective-setup.md](docs/injective-setup.md) を参照する。
+Visualizer、SimBlock、Docker、CW20 は、対応する `SETUP_*` に `no` を指定すると省略できる。Docker を省略する場合は `SETUP_DOCKER=no SETUP_CW20=no` を指定する。
 主要な導入・ビルド処理が失敗すると、後続の処理を実行せず停止する。途中までの変更は自動では巻き戻さない。
 
 仮想環境は自動作成されるが、現在のターミナルで有効にするには、完了後に次を実行する。
@@ -101,7 +101,7 @@ WSL 本体の更新と Kali Linux のインストールは、スクリプト実�
 
 #### 一括セットアップの対象と処理内容
 
-標準セットアップは x86_64 版 Kali Linux を対象とする。CLI の導入条件は [docs/injective-setup.md](docs/injective-setup.md) を参照する。
+標準セットアップは x86_64 版 Kali Linux を対象とする。
 本書で紹介する環境構築スクリプトのコマンドは、特に指定がない限り、リポジトリルートから実行する。
 環境構築は、このスクリプトの実行に集約している。標準の設定で、次の処理を順に行う。
 APT による更新とパッケージ導入は `00-install-kali-packages.sh` にまとめている。`02`、`03`、`04`、`09` の個別スクリプトは、導入済みのパッケージを使って設定・取得・ビルド・起動を行う。
@@ -116,7 +116,7 @@ APT による更新とパッケージ導入は `00-install-kali-packages.sh` に
 | Python | `venv` という名前の仮想環境の作成と `requirements.txt` のライブラリの導入 |
 | Proposer Visualizer | Node.js 20 以降の確認と npm 依存パッケージの導入 |
 | SimBlock | ソースコードの取得と Java 11 によるビルド |
-| 実験用 CLI | 導入内容は [docs/injective-setup.md](docs/injective-setup.md) を参照 |
+| 実験用 CLI | 一括セットアップで準備。設定・操作は [docs/injective-setup.md](docs/injective-setup.md) を参照 |
 | Docker / CW20 | `00` で Docker を導入し、`09` で起動。CW20 サンプルの取得と `cw20-base` の WASM ビルド |
 
 完了後は、後述の各項目に従って仮想環境の有効化、アプリの起動、実験を行う。
@@ -604,7 +604,7 @@ SSH サーバーの導入・設定には、一括セットアップを `SETUP_SS
 ## 補足
 
 - [requirements.txt](requirements.txt) には、実験で使用する Python ライブラリを記載している。
-- [docs/injective-setup.md](docs/injective-setup.md) には、CLI の導入、ウォレット作成、送金、TokenFactory / MTK、CW20 のチェーン操作を記載している。
+- [docs/injective-setup.md](docs/injective-setup.md) には、CLI の接続設定、ウォレット作成、送金、TokenFactory / MTK、CW20 のチェーン操作を記載している。
 - 秘密鍵、ニーモニック、個人用 RPC 認証情報などはコミットしないこと。
 
 ## Kali Linux を WSL から登録解除する場合

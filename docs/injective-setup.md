@@ -1,89 +1,51 @@
-# injectived の導入・操作手順
+# injectived の設定・操作手順
 
-本書は、Injective Testnet で使用する CLI `injectived` の導入、接続設定、鍵・ウォレットの管理、トランザクションの送信・確認を説明する。
+本書は、利用可能な CLI `injectived` がある環境を前提として、Injective Testnet への接続設定、鍵・ウォレットの管理、トランザクションの送信・確認を説明する。
 共通の環境構築は、[メイン README](../README.md) を参照する。
 
 本書のコマンドは、特に指定がない限り、Kali Linux のターミナルでリポジトリルートから実行する。パスは標準配置の例であり、作業先を変更した場合は読み替える。
 
+以下は同じ Bash セッションで、番号順に実行する。最初の `bash` で Bash を起動する。送信元に `testwallet`、受取先に `receiverwallet` を使用する。既存の同名ウォレットは再利用され、新しいウォレットを作る場合は鍵名を変更する。
+書き込み操作ごとに返された TxHash を照会し、ブロックへの取り込みと `code: 0` を確認してから次へ進む。Faucet での入金はブラウザで行い、コード中の TxHash・code ID・コントラクトアドレスは、その操作の実際の結果に置き換える。
+
+## 1. 接続設定を読み込む
+
+接続先と鍵名を明示し、前の実行のアドレス・識別子を引き継がないようにする。
+
 ```bash
+bash
 cd ~/temp/sus_BC2
-```
-
-鍵名の既定値は `testwallet`、鍵の保存方式は `test` keyring backend である。環境変数を既に設定している場合、各 `load-env.sh` はその値を保持する。
-
-## injectived の導入
-
-一括セットアップの `SETUP_INJECTIVE` の既定値は `yes` で、標準設定では `injectived` の導入まで行う。Linux x86_64（amd64）向けの配布バイナリを使用するため、導入を有効にした一括セットアップは x86_64 を実行条件として確認する。
-ARM などで CLI の導入を省略する場合は、次のように指定する。
-
-```bash
-SETUP_INJECTIVE=no ./setup/normal/wsl-kali-experiment-env.sh
-```
-
-この指定は CLI の導入処理を省略するもので、本書のウォレット・送金・TokenFactory・CW20 の操作には利用可能な `injectived` が必要である。
-導入した CLI が起動できることは、次のコマンドで確認する。
-
-```bash
-injectived version
-```
-
-個別に導入する場合は、必要なパッケージをメイン README の `00-install-kali-packages.sh` で準備してから、[04-install-injectived.sh](../setup/normal/04-install-injectived.sh) を実行する。
-
-<details>
-<summary>補足：injectived の導入で実行するコマンド</summary>
-
-`00-install-kali-packages.sh` で導入した `wget` と `unzip` を使い、Linux amd64 向けの配布ファイルを取得し、CLI と共有ライブラリを配置する。
-
-```bash
-mkdir -p ~/temp
-cd ~/temp
-wget -O linux-amd64.zip https://github.com/InjectiveFoundation/injective-core/releases/latest/download/linux-amd64.zip
-unzip -o linux-amd64.zip
-chmod +x injectived
-sudo mv injectived /usr/local/bin/
-if [ -f libwasmvm.x86_64.so ]; then
-  sudo mv libwasmvm.x86_64.so /usr/lib/
-  sudo ldconfig
-fi
-injectived version
-cd ~/temp/sus_BC2
-```
-
-`wget -O` は保存するファイル名を指定してダウンロードし、`unzip -o` は既存ファイルを上書きして展開する。
-`/usr/local/bin/` は CLI の配置先である。共有ライブラリが同梱されている場合は `/usr/lib/` に配置し、`ldconfig` でライブラリの検索情報を更新する。
-最後に `injectived version` で起動できることを確認する。
-
-手動で導入した場合は、最後にリポジトリルートへ戻り、以降の実験を行う。
-
-</details>
-
-<details>
-<summary>補足：過去のバージョン確認記録</summary>
-
-以下は過去の動作確認時の出力例である。配布ファイルは `latest` から取得するため、現在の導入結果は `injectived version` で確認する。
-
-```text
-Version v1.18.3 (b18483b)
-Compiled at 20260331-2102 using Go go1.23.9 (amd64)
-```
-
-</details>
-
-## ウォレットの作成・INJ の送金
-
-ウォレットの作成と送金（`bank send`）には、次のスクリプトを使用する。
-
-| 操作 | スクリプト |
-| --- | --- |
-| ウォレットの作成・確認 | [create-test-wallet.sh](../scripts/injectived/create-test-wallet.sh) |
-| INJ の送金 | [bank-send.sh](../scripts/injectived/bank-send.sh) |
-
-`injectived` 用の環境変数は、次のシェルスクリプトで現在のシェルに読み込む。
-
-```bash
-cd ~/temp/sus_BC2
+export KEY_NAME="testwallet"
+export RECIPIENT_KEY_NAME="receiverwallet"
+export KEYRING_BACKEND="test"
+export CHAIN_ID="injective-888"
+export NODE="https://injective-testnet-rpc.publicnode.com:443"
+export GAS_PRICES="500000000inj"
+export GAS=1000000
+export BANK_SEND_GAS=200000
+unset MY_ADDR ADDR CREATOR_ADDR SENDER_ADDR DENOM CODE_ID CONTRACT_ADDR
 source scripts/injectived/load-env.sh
 ```
+
+`load-env.sh` は既存の設定値を保持する。接続先や鍵を変更するときは、上の値を変更して読み込み直す。
+
+## 2. ウォレットを作成し、アドレスを取得する
+
+送信元と受取先のウォレットを作成する。補助スクリプトは、指定した鍵が存在しない場合に `injectived keys add` を実行する。
+2つ目のコマンドの `KEY_NAME` は、そのコマンドにだけ適用される。
+
+```bash
+./scripts/injectived/create-test-wallet.sh
+KEY_NAME="$RECIPIENT_KEY_NAME" ./scripts/injectived/create-test-wallet.sh
+
+export MY_ADDR="$(injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
+export ADDR="$MY_ADDR"
+export RECIPIENT_ADDR="$(injectived keys show "$RECIPIENT_KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND")"
+injectived keys list --keyring-backend "$KEYRING_BACKEND"
+printf '送信元: %s\n受取先: %s\n' "$MY_ADDR" "$RECIPIENT_ADDR"
+```
+
+作成された鍵を使って、後続の送金・トークン作成・コントラクト操作を行う。
 
 <details>
 <summary>補足：環境変数の読み込みとウォレット作成のコマンド</summary>
@@ -143,13 +105,28 @@ injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND"
 
 </details>
 
-ウォレット作成後、[Injective testnet の Faucet](https://cloud.google.com/application/web3/faucet/injective/testnet) で INJ を取得し、残高を確認する。
+## 3. Faucet で INJ を取得し、残高を確認する
+
+`MY_ADDR` を表示し、[Injective testnet の Faucet](https://cloud.google.com/application/web3/faucet/injective/testnet) に入力して INJ を取得する。この入金操作はブラウザで行う。
+送金量に加え、後続のトークン作成・コード登録に必要な手数料を支払える残高を確認する。
 
 ```bash
-injectived query bank balances "$MY_ADDR" --node="$NODE"
+echo "$MY_ADDR"
+injectived query bank balances "$MY_ADDR" \
+  --node="$NODE" --chain-id="$CHAIN_ID" --output json | jq
 ```
 
-送金時は `RECIPIENT_ADDR` と `AMOUNT` を設定し、`CONFIRM_SEND=yes` を指定して `bank-send.sh` を実行する。
+## 4. 受取先ウォレットへ INJ を送金する
+
+手順 2 で取得した `RECIPIENT_ADDR` へ `0.001 INJ` を送金する。別の宛先へ送る場合は、実行前に `RECIPIENT_ADDR` を実際のアドレスへ変更する。
+
+```bash
+export AMOUNT="1000000000000000inj"
+export BANK_SEND_GAS=200000
+CONFIRM_SEND=yes ./scripts/injectived/bank-send.sh
+```
+
+返された TxHash を控え、次の手順で送金結果を確認する。
 
 <details>
 <summary>補足：bank-send.sh が実行する送金コマンド</summary>
@@ -230,50 +207,114 @@ tx: null
 txhash: 記録のTxHash
 ```
 
-この応答はブロードキャスト時の記録であり、ブロックへの取り込み後の確定結果ではない。送金結果は、次の「トランザクションの確認」に従って別途確認する。
+この応答はブロードキャスト時の記録であり、ブロックへの取り込み後の確定結果ではない。送金結果は、手順 5 のトランザクション確認に従って別途確認する。
 
 </details>
 
-## トランザクションの確認
+## 5. トランザクションの成功を確認する
 
 送金、TokenFactory、CW20 などの書き込み操作で TxHash が返ったら、次のコマンドで結果を確認する。
 ブロックに取り込まれ、`code` が `0` であることを確認する。
 `--broadcast-mode sync` の応答で `code: 0` と TxHash が返っても、`height: "0"` であれば確定成功を示すものではない。ブロックへの取り込み後、TxHash で結果を確認する。
 
 ```bash
-TXHASH="ここにTxHashを入れる"
-injectived q tx "$TXHASH" \
-  --chain-id="$CHAIN_ID" \
-  --node="$NODE" \
-  --output json | jq
+check_tx() {
+  local tx_result
+  tx_result="$(injectived q tx "$1" \
+    --chain-id="$CHAIN_ID" \
+    --node="$NODE" \
+    --output json)" || return
+  printf '%s\n' "$tx_result" | jq
+}
+check_tx "INJ送金で返されたTxHash"
 ```
+
+`check_tx` の引数は、その操作で返された実際の TxHash に置き換える。まだ見つからない場合は、数秒待って同じコマンドを再実行する。以降の操作でもこの関数を使用する。
 
 トランザクションは、次の Explorer でも確認できる。
 
 - [Mintscan（Injective Testnet）](https://www.mintscan.io/injective-testnet)
 - [Injective Testnet Explorer](https://testnet.explorer.injective.network/)
 
-## injectived による TokenFactory / MTK の操作
+## 6. TokenFactory で MTK を作成・送金する
 
-TokenFactory を用いた MTK の作成、メタデータの設定、ミント（発行）、残高確認、送金には、[07-tokenfactory-mtk.sh](../setup/normal/07-tokenfactory-mtk.sh) を使用する。
+### 6.1. 設定を読み込み、denom を作成する
 
-TokenFactory 用の環境変数は、次のシェルスクリプトで現在のシェルに読み込む。
+同じ鍵・subdenom の組み合わせでの作成は一度だけ行う。作成済みなら作成コマンドを省略するか、`SUBDENOM` を未使用の名前に変更する。
 
 ```bash
-cd ~/temp/sus_BC2
+export GAS=300000
+export SUBDENOM="mtk"
+export CREATOR_ADDR="$MY_ADDR"
+export DENOM="factory/${CREATOR_ADDR}/${SUBDENOM}"
 source scripts/tokenfactory/load-env.sh
+CONFIRM_TX=yes ./setup/normal/07-tokenfactory-mtk.sh create-denom
 ```
-
-操作一覧は、次のコマンドで確認する。
 
 ```bash
-./setup/normal/07-tokenfactory-mtk.sh help
+check_tx "denom作成で返されたTxHash"
 ```
 
-`create-denom`、`set-metadata`、`mint`、`balance`、`send` の各操作を指定できる。
-`create-denom` で denom を作成してから、メタデータ設定、ミント、送金へ進む。同じ denom の作成は一度だけ行う。
-書き込み操作には `CONFIRM_TX=yes` と、作成手数料・ガス手数料を支払うための INJ 残高が必要である。
-メタデータ設定の実行前に、補足の「メタデータの設定」に記載した CLI 引数の確認事項を参照する。
+### 6.2. メタデータを設定する
+
+現行の補助スクリプトの `set-metadata` は末尾に `10 6` を渡すため、ここでは CLI を直接使う。
+[公式 v1.18.0 の CLI](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/client/cli/tx.go#L219-L267) は末尾に `[decimals] [shouldDisableAdminBurn]` を取り、[公式ガイド](https://docs.injective.network/developers-defi/token-launch) は `[decimals]` のみの例を掲載している。次の関数は、使用中の CLI の Usage を確認して `6 false` または `6` を選ぶ。どちらにも一致しない場合は送信せず停止する。
+
+```bash
+set_token_metadata() {
+  local metadata_help
+  local metadata_args
+  metadata_help="$(injectived tx tokenfactory set-denom-metadata --help)" || return
+  printf '%s\n' "$metadata_help"
+  if printf '%s\n' "$metadata_help" | grep -Fq '[shouldDisableAdminBurn]'; then
+    metadata_args=(6 false)
+  elif printf '%s\n' "$metadata_help" | grep -Eq 'set-denom-metadata .*\[decimals\]([[:space:]]+\[flags\])?[[:space:]]*$'; then
+    metadata_args=(6)
+  else
+    echo "Usage の位置引数を確認してからメタデータを設定してください。" >&2
+    return 1
+  fi
+  injectived tx tokenfactory set-denom-metadata \
+    "My Token Description" "$DENOM" "MTK" "My Token" "MTK" "" "" \
+    "[{\"denom\":\"$DENOM\",\"exponent\":0,\"aliases\":[]},{\"denom\":\"MTK\",\"exponent\":6,\"aliases\":[]}]" \
+    "${metadata_args[@]}" \
+    --from="$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" \
+    --chain-id="$CHAIN_ID" --node="$NODE" \
+    --gas-prices="$GAS_PRICES" --gas="$GAS" -y
+}
+set_token_metadata
+```
+
+```bash
+check_tx "メタデータ設定で返されたTxHash"
+```
+
+### 6.3. MTK をミントする
+
+小数桁数 `6` の場合、`1000000000` は `1000 MTK` に相当する。
+
+```bash
+MINT_AMOUNT=1000000000 CONFIRM_TX=yes ./setup/normal/07-tokenfactory-mtk.sh mint
+check_tx "MTKミントで返されたTxHash"
+```
+
+### 6.4. 残高を確認する
+
+```bash
+./setup/normal/07-tokenfactory-mtk.sh balance
+```
+
+### 6.5. MTK を送金し、受取先の残高を確認する
+
+```bash
+export SEND_AMOUNT=1000000
+CONFIRM_TX=yes ./setup/normal/07-tokenfactory-mtk.sh send
+check_tx "MTK送金で返されたTxHash"
+injectived query bank balances "$RECIPIENT_ADDR" \
+  --node="$NODE" --chain-id="$CHAIN_ID" --output json | jq
+```
+
+各補助スクリプトの内部コマンドと設定値は、次の補足で確認できる。
 
 <details>
 <summary>補足：TokenFactory の環境設定と各操作のコマンド</summary>
@@ -348,40 +389,19 @@ injectived tx tokenfactory create-denom \
 
 #### メタデータの設定
 
-名称、説明、表示単位などを登録する。以下は現在のスクリプトが使う引数を示したものである。
-
-```bash
-injectived tx tokenfactory set-denom-metadata \
-  "My Token Description" \
-  "$DENOM" \
-  "MTK" \
-  "My Token" \
-  "MTK" \
-  "" \
-  "" \
-  "[{\"denom\":\"$DENOM\",\"exponent\":0,\"aliases\":[]},{\"denom\":\"MTK\",\"exponent\":6,\"aliases\":[]}]" \
-  10 \
-  6 \
-  --from="$KEY_NAME" \
-  --keyring-backend "$KEYRING_BACKEND" \
-  --chain-id="$CHAIN_ID" \
-  --node="$NODE" \
-  --gas-prices="$GAS_PRICES" \
-  --gas="$GAS" \
-  -y
-```
+名称、説明、表示単位などを登録する。実行には手順 6.2 の CLI 例を使用する。
 
 単位の JSON では、最小単位の exponent を `0`、表示単位 `MTK` の exponent を `6` としている。
 現行スクリプトの末尾引数 `10 6` には、CLI の仕様との確認が必要である。
 [公式の公開ソース v1.18.0](https://github.com/InjectiveFoundation/injective-core/blob/v1.18.0/injective-chain/modules/tokenfactory/client/cli/tx.go#L219-L267) では、末尾2引数は `decimals` と `shouldDisableAdminBurn` である。
 この仕様で `10 6` を渡すと、小数桁数は `10`、管理者の burn の無効化は `false`（文字列 `true` の場合だけ有効）として扱われ、作成時と単位 JSON の `6` 桁設定に一致しない。
-[公式のトークン作成ガイド](https://docs.injective.network/developers-defi/token-launch) には9引数の例もあるため、実行前に導入した CLI の引数を次のコマンドで確認する。
+[公式のトークン作成ガイド](https://docs.injective.network/developers-defi/token-launch) には9引数の例もあるため、実行前に使用中の CLI の引数を次のコマンドで確認する。
 
 ```bash
 injectived tx tokenfactory set-denom-metadata --help
 ```
 
-上記のコードブロックは現在のスクリプト内容を示したものであり、引数の修正方針は使用する CLI の仕様に合わせて決める。
+補助スクリプトの `set-metadata` の末尾引数は、使用する CLI の仕様に合わせた修正が必要である。手順 6.2 は、この操作だけ CLI を直接実行する。
 
 #### ミント・残高確認・送金
 
@@ -428,21 +448,105 @@ injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "${SEND_AMOUNT}${DENOM}" \
 
 </details>
 
-## injectived による CW20 のコード登録・操作
+## 7. CW20 のコード登録・初期化・送金・ミントを行う
 
-登録する WASM ファイルの準備は、[メイン README の CW20 ビルドの補足](../README.md#cw20-サンプルの取得と-wasm-のビルド) を参照する。
-生成された `~/temp/cw-plus/artifacts/cw20_base.wasm` をチェーンに登録するには、[11-store-cw20-code.sh](../setup/normal/11-store-cw20-code.sh) を使用する。
+登録する WASM ファイルは、[メイン README の CW20 ビルドの補足](../README.md#cw20-サンプルの取得と-wasm-のビルド) に従って準備しておく。
 
-コードの登録には `CONFIRM_TX=yes` を指定する。登録用のガス設定例は `GAS=3000000` である。
-
-CW20 用の環境変数は、次のシェルスクリプトで現在のシェルに読み込む。
+### 7.1. 設定を読み込み、WASM を登録する
 
 ```bash
-cd ~/temp/sus_BC2
+export GAS=3000000
+export SENDER_ADDR="$MY_ADDR"
+export CREATOR_ADDR="$MY_ADDR"
 source scripts/CW20/load-env.sh
+printf '署名者: %s\nWASM: %s\n' "$SENDER_ADDR" "$WASM_PATH"
+CONFIRM_TX=yes ./setup/normal/11-store-cw20-code.sh
 ```
 
-初期化コマンドに渡す `instantiate_msg.json` は、[CW20 初期化メッセージの作成](cw20-instantiate-message.md) に従って準備する。
+CLI の実行確認が表示されたら、内容を確認して `y` を入力し、`Enter` を押す。
+
+### 7.2. 登録結果を確認し、code ID を設定する
+
+```bash
+check_tx "WASM登録で返されたTxHash"
+```
+
+成功したトランザクションの `events` にある `code_id` を読み取り、次の値に設定する。
+
+```bash
+export CODE_ID="取得したcode_id"
+```
+
+### 7.3. 初期化メッセージを作成する
+
+```bash
+TOKEN_NAME="My Token" TOKEN_SYMBOL="MTK" TOKEN_DECIMALS=6 INITIAL_BALANCE=1000000 OUTPUT_FILE=instantiate_msg.json \
+  ./scripts/CW20/create-instantiate-msg.sh
+jq . instantiate_msg.json
+```
+
+JSON の初期残高と minter のアドレスが `CREATOR_ADDR` と一致することを確認する。生成処理の詳細は、[CW20 初期化メッセージの作成](cw20-instantiate-message.md) を参照する。
+
+### 7.4. コントラクトを初期化する
+
+コード登録用のガス値から、以降の操作の値へ切り替える。
+
+```bash
+export GAS=300000
+injectived tx wasm instantiate "$CODE_ID" "$(cat instantiate_msg.json)" \
+  --from="$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" \
+  --chain-id="$CHAIN_ID" --node="$NODE" \
+  --label "cw20-mtk-sample" --no-admin \
+  --gas-prices="$GAS_PRICES" --gas="$GAS" --output json -y
+check_tx "初期化で返されたTxHash"
+```
+
+### 7.5. コントラクトアドレスを設定する
+
+成功したトランザクションの `events` にある `_contract_address` または `contract_address` を読み取り、次の値に設定する。
+
+```bash
+export CONTRACT_ADDR="取得したcontract_address"
+```
+
+### 7.6. トークン情報と残高を確認する
+
+```bash
+injectived q wasm contract-state smart "$CONTRACT_ADDR" \
+  '{"token_info":{}}' --node "$NODE" --output json | jq
+injectived q wasm contract-state smart "$CONTRACT_ADDR" \
+  '{"balance":{"address":"'"$SENDER_ADDR"'"}}' --node "$NODE" --output json | jq
+```
+
+### 7.7. CW20 トークンを送金する
+
+```bash
+export CW20_SEND_AMOUNT=1000000
+injectived tx wasm execute "$CONTRACT_ADDR" \
+  '{"transfer":{"recipient":"'"$RECIPIENT_ADDR"'","amount":"'"$CW20_SEND_AMOUNT"'"}}' \
+  --from "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" \
+  --chain-id "$CHAIN_ID" --node "$NODE" \
+  --gas-prices "$GAS_PRICES" --gas "$GAS" --output json -y
+check_tx "CW20送金で返されたTxHash"
+injectived q wasm contract-state smart "$CONTRACT_ADDR" \
+  '{"balance":{"address":"'"$RECIPIENT_ADDR"'"}}' --node "$NODE" --output json | jq
+```
+
+### 7.8. CW20 トークンをミントする
+
+初期化メッセージで minter に設定した `KEY_NAME` の鍵で実行する。
+
+```bash
+export CW20_MINT_AMOUNT=1000000
+injectived tx wasm execute "$CONTRACT_ADDR" \
+  '{"mint":{"recipient":"'"$SENDER_ADDR"'","amount":"'"$CW20_MINT_AMOUNT"'"}}' \
+  --from "$KEY_NAME" --keyring-backend "$KEYRING_BACKEND" \
+  --chain-id "$CHAIN_ID" --node "$NODE" \
+  --gas-prices "$GAS_PRICES" --gas "$GAS" --output json -y
+check_tx "CW20ミントで返されたTxHash"
+injectived q wasm contract-state smart "$CONTRACT_ADDR" \
+  '{"balance":{"address":"'"$SENDER_ADDR"'"}}' --node "$NODE" --output json | jq
+```
 
 <details>
 <summary>補足：CW20 の環境設定・コード登録・初期化・照会・送金・ミント</summary>
@@ -491,7 +595,7 @@ injectived tx wasm store "$WASM_PATH" \
 
 #### コントラクトの初期化
 
-コード登録時の TxHash を使って「トランザクションの確認」のコマンドを実行し、結果の `events` から `code_id` を確認する。
+コード登録時の TxHash を使って手順 5 の `check_tx` を実行し、結果の `events` から `code_id` を確認する。
 取得した値を `CODE_ID` に設定し、初期化メッセージを使ってコントラクトを作成する。
 以下では、コード登録用に設定したガス上限を、初期化・送金・ミントで使う設定例の `300000` に変更する。`source` は既存の `GAS` を保持するため、この変更を明示している。
 
