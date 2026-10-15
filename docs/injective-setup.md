@@ -73,37 +73,21 @@ prepare_wallets
 すべて成功した場合だけ、取得したアドレスを現在のシェルへ設定する。初期設定では `RECIPIENT_ADDR` と `MY_ADDR` が同じ値になり、INJ・TokenFactory・CW20 の送金先に自分のアドレスを使用する。途中のコマンドが失敗した場合は、アドレスの表示や後続の処理へ進まず停止する。
 作成された鍵を使って、後続の送金・トークン作成・コントラクト操作を行う。新しいターミナルを開いた場合は、手順 1・2 を実行し直す。
 
-### 2.1. 受取ウォレットを設定する
+### 2.1. 受取アドレスを設定する
 
-手順 2 が成功した同じ Bash セッションで実行する。初期設定の受取先は自分のウォレットであり、次のコマンドで自分宛に設定し直し、設定値を確認できる。
-
-```bash
-export RECIPIENT_KEY_NAME="${KEY_NAME:?先に手順2を実行してください}" \
-       RECIPIENT_ADDR="${MY_ADDR:?先に手順2を実行してください}" &&
-  printf '受取先の鍵名: %s\n受取先アドレス: %s\n' "$RECIPIENT_KEY_NAME" "$RECIPIENT_ADDR"
-```
-
-`RECIPIENT_KEY_NAME` は受取先の鍵名、`RECIPIENT_ADDR` は実際の送金先アドレスである。後続の INJ・TokenFactory・CW20 の送金では、この `RECIPIENT_ADDR` を使う。
-鍵名や自分のアドレスが未設定の場合は、手順 2 を実行するよう案内して設定を中止する。別のウォレットを受取先にする場合は、次の補足のコマンドを実行する。
-
-<details>
-<summary>補足：別のウォレットを受取先にする場合</summary>
-
-手順 2 の関数を定義した後、受取先の鍵名を変更して実行する。受取先の鍵が存在しない場合だけ作成し、そのアドレスを `RECIPIENT_ADDR` に設定する。
+手順 2 が成功した同じ Bash セッションで実行する。初期設定の受取先は自分のアドレスである。別のアドレスへ送金する場合は、`inj1...` を実際の受取アドレスに置き換えて設定する。
 
 ```bash
-export RECIPIENT_KEY_NAME="receiverwallet"
-prepare_wallets
+export RECIPIENT_ADDR="inj1..."
 ```
 
-自分のウォレットを受取先に戻す場合は、次を実行する。
+後続の INJ・TokenFactory・CW20 の送金では、この `RECIPIENT_ADDR` を使う。
+
+自分のアドレスを受取先に戻す場合は、次を実行する。
 
 ```bash
-export RECIPIENT_KEY_NAME="$KEY_NAME"
-prepare_wallets
+export RECIPIENT_ADDR="$MY_ADDR"
 ```
-
-</details>
 
 <details>
 <summary>補足：環境変数の読み込みとウォレット作成のコマンド</summary>
@@ -189,7 +173,7 @@ injectived query bank balances "$MY_ADDR" \
 
 ## 4. 自分のウォレットへ INJ を送金する
 
-手順 2 で設定した `RECIPIENT_ADDR` へ `0.001 INJ` を送金する。初期設定の宛先は自分の `MY_ADDR` である。別の宛先へ送る場合は、手順 2 の補足で受取用ウォレットを指定するか、実行前に `RECIPIENT_ADDR` を実際のアドレスへ変更する。
+手順 2 で設定した `RECIPIENT_ADDR` へ `0.001 INJ` を送金する。初期設定の宛先は自分の `MY_ADDR` である。別の宛先へ送る場合は、手順 2.1 で受取アドレスを設定する。
 
 ```bash
 export AMOUNT="1000000000000000inj"
