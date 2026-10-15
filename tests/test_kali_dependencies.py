@@ -17,11 +17,13 @@ BASE_PACKAGES = (
 APT_COMMANDS = [
     "apt-get --error-on=any -o Acquire::Retries=5 update",
     "apt-get -o Acquire::Retries=5 --with-new-pkgs upgrade -y",
+    f"apt-get -o Acquire::Retries=5 --download-only install -y {BASE_PACKAGES} docker.io",
     f"apt-get -o Acquire::Retries=5 install -y {BASE_PACKAGES} docker.io",
 ]
 APT_STAGES = (
     "Updating APT package indexes",
     "Upgrading installed packages",
+    "Downloading development dependencies",
     "Installing development dependencies",
 )
 VERSION_COMMANDS = (
@@ -39,7 +41,7 @@ class KaliDependencyTests(unittest.TestCase):
         self.bin.mkdir()
         self.log = self.directory / "commands.log"
         # No host PATH fallback: removing a mock must never expose real APT or sudo.
-        for command in ("bash", "dirname", "mkdir", "sort", "chmod"):
+        for command in ("bash", "dirname", "mkdir", "sort", "chmod", "tee", "mktemp", "rm"):
             executable = shutil.which(command)
             if executable is None:
                 self.fail(f"Required test utility is unavailable: {command}")
@@ -47,6 +49,7 @@ class KaliDependencyTests(unittest.TestCase):
         self.env = {
             "PATH": str(self.bin),
             "HOME": str(self.directory),
+            "TMPDIR": str(self.directory),
             "COMMAND_LOG": str(self.log),
             "NODE_STUB_VERSION": "v24.21.0",
             "WORKDIR": str(self.directory),
@@ -55,6 +58,9 @@ class KaliDependencyTests(unittest.TestCase):
             "RESET_NODE_MODULES": "no",
             "JAVA_HOME": "",
         }
+        self.apt_state = self.directory / "apt-state"
+        self.apt_state.mkdir()
+        self.env["APT_MOCK_STATE"] = str(self.apt_state)
         self.executable(self.bin / "sudo", 'printf "sudo %s\\n" "$*" >> "$COMMAND_LOG"\nexec "$@"')
         self.executable(self.bin / "id", 'printf "id %s\\n" "$*" >> "$COMMAND_LOG"\nprintf "%s\\n" "${ID_STUB_UID:-0}"')
         self.executable(self.bin / "apt-get", '''
@@ -63,15 +69,35 @@ stage=""
 for argument in "$@"; do
   case "$argument" in update|upgrade|install) stage="$argument" ;; esac
 done
+if [ "$stage" = "install" ] && [[ " $* " == *' --download-only '* ]]; then
+  stage="download"
+fi
+state_file="$APT_MOCK_STATE/$stage.count"
+attempt=0
+if [ -f "$state_file" ]; then read -r attempt < "$state_file"; fi
+attempt=$((attempt + 1))
+printf '%s\\n' "$attempt" > "$state_file"
 printf 'mock apt-get %s\\n' "$stage"
-if [ "$stage" = "${APT_FAIL_STAGE:-}" ]; then
-  printf 'mock apt-get failure: %s\\n' "$stage" >&2
-  exit 100
+failures="${APT_FAIL_ATTEMPTS:--1}"
+if [ "$stage" = "${APT_FAIL_STAGE:-}" ] && { [ "$failures" -lt 0 ] || [ "$attempt" -le "$failures" ]; }; then
+  if [ "$attempt" -gt 1 ] && [ -n "${APT_LATER_FAIL_OUTPUT:-}" ]; then
+    printf '%s\\n' "$APT_LATER_FAIL_OUTPUT" >&2
+  elif [ -n "${APT_FAIL_OUTPUT:-}" ]; then
+    printf '%s\\n' "$APT_FAIL_OUTPUT" >&2
+  else
+    printf 'mock apt-get failure: %s\\n' "$stage" >&2
+  fi
+  status="${APT_FAIL_STATUS:-100}"
+  if [ "$attempt" -gt 1 ] && [ -n "${APT_LATER_FAIL_STATUS:-}" ]; then
+    status="$APT_LATER_FAIL_STATUS"
+  fi
+  exit "$status"
 fi
 ''')
+        self.executable(self.bin / "sleep", 'printf "sleep %s\\n" "$*" >> "$COMMAND_LOG"')
         for command in (
             "apt", "git", "python3", "java", "npm", "jq", "wget", "unzip",
-            "docker", "systemctl", "service", "cp", "sed", "tee", "sshd",
+            "docker", "systemctl", "service", "cp", "sed", "sshd",
             "ldconfig", "mv", "usermod",
         ):
             self.executable(
@@ -113,6 +139,8 @@ printf "%s\\n" "$NODE_STUB_VERSION"
 
     def executable(self, path, body):
         path.parent.mkdir(parents=True, exist_ok=True)
+        if path.is_symlink():
+            path.unlink()
         path.write_text(f"#!/usr/bin/env bash\n{body}\n")
         path.chmod(0o755)
 
@@ -125,6 +153,8 @@ printf "%s\\n" "$NODE_STUB_VERSION"
     def run_setup(self, filename, macbook=False):
         if self.log.exists():
             self.log.unlink()
+        for path in self.apt_state.iterdir():
+            path.unlink()
         return subprocess.run(
             [str(self.bin / "bash"), str((ROOT / "setup/macbook" if macbook else SETUP) / filename)],
             env=self.env,
@@ -142,6 +172,145 @@ printf "%s\\n" "$NODE_STUB_VERSION"
     def assert_no_apt(self):
         self.assertNotRegex(self.commands(), r"(?m)^(?:sudo )?apt(?:-get)? ")
 
+    def http_fetch_error(self, code=500):
+        return (
+            f"E: Failed to fetch http://mirror.example.invalid/package.deb  {code} HTTP error [IP: 192.0.2.1 80]\n"
+            "E: Unable to fetch some archives, maybe run apt-get update or try with --fix-missing?"
+        )
+
+    def sleep_calls(self):
+        return [line for line in self.commands().splitlines() if line.startswith("sleep ")]
+
+    def assert_no_fetch_log_left(self):
+        expected = {"bin", "apt-state", "commands.log", "visualizer", "simblock", "java11"}
+        self.assertEqual({path.name for path in self.directory.iterdir()}, expected)
+
+    def test_transient_supported_http_errors_retry_only_download_then_apply_once(self):
+        for code in (500, 502, 503, 504):
+            with self.subTest(code=code):
+                self.env.update(APT_FAIL_STAGE="download", APT_FAIL_ATTEMPTS="1", APT_FAIL_OUTPUT=self.http_fetch_error(code))
+                result = self.run_setup("00-install-kali-packages.sh")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.apt_commands(), APT_COMMANDS[:2] + [APT_COMMANDS[2]] * 2 + APT_COMMANDS[3:])
+                self.assertEqual(self.sleep_calls(), ["sleep 10"])
+                self.assertIn("(attempt 2/3)", result.stdout)
+                self.assertIn(str(code), result.stdout)
+                self.assertIn("Installed basic packages.", result.stdout)
+                self.assert_no_fetch_log_left()
+
+    def test_multiple_supported_fetch_errors_are_retryable(self):
+        self.env.update(
+            APT_FAIL_STAGE="download", APT_FAIL_ATTEMPTS="1",
+            APT_FAIL_OUTPUT=self.http_fetch_error(500) + "\nE: Failed to fetch http://mirror.example.invalid/second.deb  503 Service Unavailable",
+        )
+        result = self.run_setup("00-install-kali-packages.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.apt_commands(), APT_COMMANDS[:2] + [APT_COMMANDS[2]] * 2 + APT_COMMANDS[3:])
+
+    def test_persistent_http_failure_stops_at_limit_before_apply(self):
+        self.env.update(APT_FAIL_STAGE="download", APT_FAIL_OUTPUT=self.http_fetch_error())
+        result = self.run_setup("00-install-kali-packages.sh")
+        self.assertEqual(result.returncode, 100)
+        self.assertEqual(self.apt_commands(), APT_COMMANDS[:2] + [APT_COMMANDS[2]] * 3)
+        self.assertEqual(self.sleep_calls(), ["sleep 10", "sleep 10"])
+        self.assertIn("exhausted after 3 attempts", result.stderr)
+        self.assertIn(APT_STAGES[2], result.stderr)
+        self.assertIn(APT_COMMANDS[2], result.stderr)
+        self.assertNotIn("node --version", self.commands())
+        self.assertNotIn("Installed basic packages.", result.stdout)
+        self.assert_no_fetch_log_left()
+
+    def test_permanent_or_mixed_fetch_errors_never_retry(self):
+        errors = (
+            self.http_fetch_error(404), self.http_fetch_error(501),
+            self.http_fetch_error(500) + "\nE: Failed to fetch http://mirror.example.invalid/missing.deb  404 Not Found",
+            self.http_fetch_error(500) + "\nE: The repository is not signed.",
+            self.http_fetch_error(500) + "\nE: Unable to correct problems, you have held broken packages.",
+            self.http_fetch_error(500) + "\nE: Sub-process /usr/bin/dpkg returned an error code (1)",
+            "W: Mirror returned 500\nE: Unable to fetch some archives",
+        )
+        for error in errors:
+            with self.subTest(error=error):
+                self.env.update(APT_FAIL_STAGE="download", APT_FAIL_OUTPUT=error)
+                result = self.run_setup("00-install-kali-packages.sh")
+                self.assertEqual(result.returncode, 100)
+                self.assertEqual(self.apt_commands(), APT_COMMANDS[:3])
+                self.assertEqual(self.sleep_calls(), [])
+                self.assertNotIn("Installed basic packages.", result.stdout)
+
+    def test_non_100_fetch_failure_never_retries_even_with_http_error(self):
+        self.env.update(APT_FAIL_STAGE="download", APT_FAIL_STATUS="42", APT_FAIL_OUTPUT=self.http_fetch_error())
+        result = self.run_setup("00-install-kali-packages.sh")
+        self.assertEqual(result.returncode, 42)
+        self.assertEqual(self.apt_commands(), APT_COMMANDS[:3])
+        self.assertEqual(self.sleep_calls(), [])
+
+    def test_later_permanent_error_uses_current_log_and_exit_status(self):
+        for status in (100, 42):
+            with self.subTest(status=status):
+                self.env.update(
+                    APT_FAIL_STAGE="download", APT_FAIL_OUTPUT=self.http_fetch_error(),
+                    APT_LATER_FAIL_OUTPUT=self.http_fetch_error(404), APT_LATER_FAIL_STATUS=str(status),
+                )
+                result = self.run_setup("00-install-kali-packages.sh")
+                self.assertEqual(result.returncode, status)
+                self.assertEqual(self.apt_commands(), APT_COMMANDS[:2] + [APT_COMMANDS[2]] * 2)
+                self.assertEqual(self.sleep_calls(), ["sleep 10"])
+                self.assertIn("404", result.stdout)
+
+    def test_update_upgrade_and_apply_do_not_retry_http_errors(self):
+        for stage, index in (("update", 0), ("upgrade", 1), ("install", 3)):
+            with self.subTest(stage=stage):
+                self.env.update(APT_FAIL_STAGE=stage, APT_FAIL_OUTPUT=self.http_fetch_error())
+                result = self.run_setup("00-install-kali-packages.sh")
+                self.assertEqual(result.returncode, 100)
+                self.assertEqual(self.apt_commands(), APT_COMMANDS[:index + 1])
+                self.assertEqual(self.sleep_calls(), [])
+                self.assertIn("500", result.stderr)
+                self.assertNotIn("Installed basic packages.", result.stdout)
+
+    def test_retry_policy_accepts_one_attempt_and_zero_delay(self):
+        for attempts, failures, expected_status in ((1, -1, 100), (2, 1, 0)):
+            with self.subTest(attempts=attempts):
+                self.env.update(
+                    APT_HTTP_MAX_ATTEMPTS=str(attempts), APT_HTTP_RETRY_DELAY="0",
+                    APT_FAIL_STAGE="download", APT_FAIL_ATTEMPTS=str(failures), APT_FAIL_OUTPUT=self.http_fetch_error(),
+                )
+                result = self.run_setup("00-install-kali-packages.sh")
+                self.assertEqual(result.returncode, expected_status, result.stderr)
+                self.assertEqual(self.sleep_calls(), ["sleep 0"] if attempts == 2 else [])
+                expected = APT_COMMANDS[:2] + [APT_COMMANDS[2]] * attempts
+                self.assertEqual(self.apt_commands(), expected + (APT_COMMANDS[3:] if expected_status == 0 else []))
+
+    def test_invalid_retry_policy_stops_before_apt(self):
+        for name, values in (
+            ("APT_HTTP_MAX_ATTEMPTS", ("0", "-1", "bad", "1.5")),
+            ("APT_HTTP_RETRY_DELAY", ("-1", "bad", "1.5")),
+        ):
+            for value in values:
+                with self.subTest(name=name, value=value):
+                    self.env[name] = value
+                    try:
+                        result = self.run_setup("00-install-kali-packages.sh")
+                        self.assertEqual(result.returncode, 1)
+                        self.assertIn(name, result.stderr)
+                        self.assertEqual(self.apt_commands(), [])
+                    finally:
+                        self.env.pop(name)
+
+    def test_tee_failure_cannot_turn_download_into_success(self):
+        self.executable(self.bin / "tee", '''
+while IFS= read -r line; do printf '%s\\n' "$line"; done
+exit 74
+''')
+        result = self.run_setup("00-install-kali-packages.sh")
+        self.assertEqual(result.returncode, 74)
+        self.assertEqual(self.apt_commands(), APT_COMMANDS[:3])
+        self.assertEqual(self.sleep_calls(), [])
+        self.assertNotIn("node --version", self.commands())
+        self.assertNotIn("Installed basic packages.", result.stdout)
+        self.assert_no_fetch_log_left()
+
     def test_package_selection_covers_all_docker_and_ssh_options(self):
         for docker in ("yes", "no"):
             for ssh in ("yes", "no"):
@@ -155,6 +324,7 @@ printf "%s\\n" "$NODE_STUB_VERSION"
                     if ssh == "yes":
                         packages += " openssh-server"
                     self.assertEqual(self.apt_commands(), APT_COMMANDS[:2] + [
+                        f"apt-get -o Acquire::Retries=5 --download-only install -y {packages}",
                         f"apt-get -o Acquire::Retries=5 install -y {packages}",
                     ])
 
@@ -181,7 +351,8 @@ printf "%s\\n" "$NODE_STUB_VERSION"
                 self.assertEqual(result.stdout.splitlines(), [
                     f"==> {APT_STAGES[0]}", "mock apt-get update",
                     f"==> {APT_STAGES[1]}", "mock apt-get upgrade",
-                    f"==> {APT_STAGES[2]}", "mock apt-get install",
+                    f"==> {APT_STAGES[2]} (attempt 1/3)", "mock apt-get download",
+                    f"==> {APT_STAGES[3]}", "mock apt-get install",
                     "python3 stub version", "git stub version", "java stub version",
                     version, "npm stub version", "jq stub version",
                     "Installed basic packages.",
@@ -190,14 +361,15 @@ printf "%s\\n" "$NODE_STUB_VERSION"
                 self.assertEqual(without_sudo, APT_COMMANDS + ["node --version"] + list(VERSION_COMMANDS))
 
     def test_apt_failures_keep_original_status_and_stop_pipeline(self):
-        for index, stage in enumerate(("update", "upgrade", "install")):
+        for index, stage in enumerate(("update", "upgrade", "download", "install")):
             with self.subTest(stage=stage):
                 self.env["APT_FAIL_STAGE"] = stage
                 result = self.run_setup("00-install-kali-packages.sh")
                 self.assertEqual(result.returncode, 100)
                 self.assertEqual(self.apt_commands(), APT_COMMANDS[:index + 1])
                 self.assertIn(f"==> {APT_STAGES[index]}", result.stdout)
-                self.assertIn(f"mock apt-get failure: {stage}", result.stderr)
+                output = result.stdout + result.stderr if stage == "download" else result.stderr
+                self.assertIn(f"mock apt-get failure: {stage}", output)
                 self.assertIn(APT_STAGES[index], result.stderr)
                 self.assertIn("00-install-kali-packages.sh", result.stderr)
                 self.assertIn(APT_COMMANDS[index], result.stderr)

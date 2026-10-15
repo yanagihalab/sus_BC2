@@ -71,7 +71,7 @@ bash ./setup/normal/wsl-kali-experiment-env.sh
 | 順序 | 処理 | 内容 |
 | --- | --- | --- |
 | 1 | 設定・実行条件の確認 | 各 `SETUP_*` の値、リポジトリ、`requirements.txt`、Visualizer の `package.json` を確認する。標準設定は x86_64 向けで、CW20 をビルドする場合は Docker の導入も有効にする。作業先と各パスを設定し、WSL 上での実行かを確認する。WSL ではない場合は警告を表示する。 |
-| 2 | Kali の更新とパッケージの導入 | `00-install-kali-packages.sh` で、APT のパッケージ一覧更新、インストール済みパッケージの更新、必要なパッケージの導入を各1回実行する。基本ツールに加え、`SETUP_DOCKER=yes` では `docker.io`、`SETUP_SSH=yes` では `openssh-server` を同じ install 処理で導入する。Node.js が 20 以上であることと各ツールのバージョンを確認する。APT のダウンロード再試行と失敗診断も、この段階に集約する。 |
+| 2 | Kali の更新とパッケージの導入 | `00-install-kali-packages.sh` で、APT のパッケージ一覧更新、インストール済みパッケージの更新、必要なパッケージの事前ダウンロード、インストールを順に実行する。事前取得の HTTP 500・502・503・504 は回数を限って再試行する。基本ツールに加え、`SETUP_DOCKER=yes` では `docker.io`、`SETUP_SSH=yes` では `openssh-server` を同じ install 処理で導入する。Node.js が 20 以上であることと各ツールのバージョンを確認する。 |
 | 3 | Python 仮想環境の作成 | リポジトリ直下に `venv/` を作成し、その環境に `requirements.txt` の `requests`、`numpy`、`scipy`、`tqdm`、`pandas`、`matplotlib` を導入する。作成先は `VENV_DIR` で変更できる。 |
 | 4 | Visualizer の依存パッケージの導入 | `08-setup-proposer-visualizer.sh` で、`Day1/Proposer-visualizer` 内の `npm install` を実行する。Visualizer の起動は別途行う。 |
 | 5 | SSH サーバーの設定（任意） | `SETUP_SSH=yes` の場合だけ、`02-setup-vscode-ssh.sh` を実行する。処理順序の 2 で導入した OpenSSH の標準ポートを `2222` に設定する。パスワード認証を有効、root ログインを無効にし、SSH サービスを再起動する。 |
@@ -153,10 +153,11 @@ sudo apt-get -o Acquire::Retries=5 --with-new-pkgs upgrade -y
 `apt-get upgrade` は、その一覧を使ってインストール済みパッケージを更新する。`--with-new-pkgs` は更新に必要な新規パッケージの導入を許可し、`-y` は確認への応答を自動化する。
 `-o Acquire::Retries=5` は、このコマンドのダウンロード再試行回数を 5 回に設定する。
 `00-install-kali-packages.sh` 内の APT 処理が失敗した場合は、元の出力に加えて処理段階、スクリプトと行番号、実行コマンド、終了コードを表示し、後続の処理を停止する。
+update と upgrade は各1回実行し、失敗した場合はその時点で停止する。以降の基本ツールの事前取得だけに、HTTP エラー用の再試行処理を設けている。
 
 #### 基本ツールのインストール
 
-基本ツールと、指定した機能に必要なパッケージを配列にまとめ、1回の install 処理で導入する。
+基本ツールと、指定した機能に必要なパッケージを配列にまとめ、事前にダウンロードしてから1回の install 処理で導入する。
 `SETUP_DOCKER` の既定値は `yes`、`SETUP_SSH` の既定値は `no` である。一括セットアップの入口は、この2つの指定を `00-install-kali-packages.sh` に渡す。
 `00-install-kali-packages.sh` は、両方の値が `yes` または `no` であることを確認し、それ以外の場合は APT の実行前に停止する。
 
@@ -174,11 +175,15 @@ fi
 if [ "$SETUP_SSH" = "yes" ]; then
   PACKAGES+=(openssh-server)
 fi
+sudo apt-get -o Acquire::Retries=5 --download-only install -y "${PACKAGES[@]}"
 sudo apt-get -o Acquire::Retries=5 install -y "${PACKAGES[@]}"
 ```
 
 配列の順序は基本ツール、Docker、SSH サーバーの順である。`"${PACKAGES[@]}"` は、配列の各要素を別々の引数として渡す。
-`00-install-kali-packages.sh` は update、upgrade、install を各1回呼び出す。`Acquire::Retries=5` は各コマンド内のダウンロード再試行であり、APT の全処理を繰り返すものではない。
+`--download-only` は取得だけを行い、パッケージの展開・インストールは行わない。取得に成功してから通常の install を実行する。[APT の公式マニュアル](https://manpages.debian.org/trixie/apt/apt-get.8.en.html)も参照できる。
+事前取得が終了コード `100` で失敗し、取得エラーが HTTP `500`・`502`・`503`・`504` だけの場合は、10秒待って同じ取得コマンドを再実行する。既定では初回を含め最大3回試す。取得済みのキャッシュは削除しない。
+404、署名・依存関係など別のエラーが混在する場合は再試行せず停止する。インストール処理自体も自動では繰り返さない。パッケージ設定の確認画面は通常の install 時に操作する。
+`APT_HTTP_MAX_ATTEMPTS`（正の整数、既定 `3`）と `APT_HTTP_RETRY_DELAY`（秒、非負整数、既定 `10`）で事前取得の試行回数と待機時間を指定できる。`Acquire::Retries=5` は各 APT コマンド内の取得再試行であり、この上限とは別である。
 
 | パッケージ | 用途 |
 | --- | --- |
@@ -570,6 +575,35 @@ npm run dev -- --host 0.0.0.0
 `node_modules/`、ビルド出力、生成されたマニフェストは Git の管理対象外である。
 
 ## 困ったとき
+
+### APT のパッケージ取得が HTTP 500 などで失敗する
+
+`E: Failed to fetch ... 500 Internal Error` は、取得先または通信経路から HTTP エラーが返されたことを示す。終了コード `100` だけでは、APT のどの問題かは特定できない。
+`00-install-kali-packages.sh` は、基本ツールの事前取得で上記の HTTP エラーが続くと、試行回数と失敗した段階を表示して停止する。
+
+実行中のセットアップが終了し、プロンプトに戻ってから、時間を置いて同じオプションで再実行する。標準設定の場合は次を使う。
+
+```bash
+cd ~/temp/sus_BC2
+bash ./setup/normal/wsl-kali-experiment-env.sh
+setup_exit_code=$?
+printf 'セットアップ終了コード: %s\n' "$setup_exit_code"
+```
+
+以前 `SETUP_SSH=yes` などを指定した場合は、同じ指定を付ける。終了コードが `0` で、セットアップの完了メッセージが表示されたことを確認する。取得済みのファイルを残して再試行するため、`apt clean` は実行しない。
+APT が案内する `--fix-missing` は、取得できないパッケージを保留する指定であり、必要なツールの導入完了を確認する本手順では追加しない。
+
+繰り返し失敗する場合は、Kali 側で OS とリポジトリ設定を確認する。
+
+```bash
+cat /etc/os-release
+grep -RnsE --include='*.list' --include='*.sources' \
+  '^[[:space:]]*(deb(-src)?[[:space:]]|Types:|URIs:|Suites:|Components:|Enabled:|Signed-By:)' \
+  /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null
+```
+
+`http.kali.org` は配布ミラーへ転送するため、エラーに別のホスト名が表示されることがある。`kali-last-snapshot` は公式の配布ブランチであり、HTTP エラーの対処として `kali-rolling` に切り替える必要はない。
+取得先を見直す場合は、[Kali の公式リポジトリ設定](https://www.kali.org/docs/general-use/kali-apt-sources/)と[公式ミラーの案内](https://www.kali.org/docs/community/kali-linux-mirrors/)を参照し、現在のブランチ・コンポーネント・署名設定を保って URI を検討する。セットアップスクリプトはリポジトリ設定を書き換えない。
 
 ### `python` コマンドが見つからない
 

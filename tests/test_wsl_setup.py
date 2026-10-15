@@ -48,7 +48,7 @@ class SetupTestCase(unittest.TestCase):
         self.binary_directory = self.directory / "bin"
         self.binary_directory.mkdir()
         # All installers and privileged commands must resolve to mocks, never host PATH.
-        for command in ("bash", "dirname", "mkdir", "grep", "env", "ls", "chmod", "cat"):
+        for command in ("bash", "dirname", "mkdir", "grep", "env", "ls", "chmod", "cat", "tee", "mktemp", "rm"):
             executable = shutil.which(command)
             if executable is None:
                 self.fail(f"Required test utility is unavailable: {command}")
@@ -56,13 +56,15 @@ class SetupTestCase(unittest.TestCase):
         self.log = self.directory / "commands.jsonl"
         self.environment = {
             key: value for key, value in os.environ.items()
-            if not key.startswith(("SETUP_", "RUN_", "TEST_"))
+            if not key.startswith(("SETUP_", "RUN_", "TEST_", "APT_HTTP_"))
             and key not in ("TARGET_REPO", "WORKDIR", "VENV_DIR", "APP_DIR", "CW_PLUS_DIR")
         }
         self.environment.update(
             PATH=str(self.binary_directory),
             TEST_LOG=str(self.log),
+            TMPDIR=str(self.directory),
         )
+        self.write_stub(self.binary_directory / "sleep")
 
     def write_stub(self, path, body=""):
         if path.is_symlink():
@@ -117,9 +119,19 @@ python.chmod(0o755)
         self.write_stub(self.binary_directory / "apt", "sys.exit(99)\n")
         self.write_stub(self.binary_directory / "apt-get", '''
 stage = next(argument for argument in sys.argv[1:] if argument in ("update", "upgrade", "install"))
-if os.environ.get("TEST_FAIL_APT_STAGE") == stage:
-    print("mock APT failure", file=sys.stderr)
-    sys.exit(100)
+if stage == "install" and "--download-only" in sys.argv[1:]:
+    stage = "download"
+calls = [json.loads(line) for line in Path(os.environ["TEST_LOG"]).read_text().splitlines()]
+attempt = sum(
+    call["step"] == "apt-get" and (
+        (stage == "download" and "--download-only" in call["args"])
+        or (stage != "download" and stage in call["args"] and "--download-only" not in call["args"])
+    ) for call in calls
+)
+failures = int(os.environ.get("TEST_APT_FAIL_ATTEMPTS", "-1"))
+if os.environ.get("TEST_FAIL_APT_STAGE") == stage and (failures < 0 or attempt <= failures):
+    print(os.environ.get("TEST_APT_ERROR", "mock APT failure"), file=sys.stderr)
+    sys.exit(int(os.environ.get("TEST_APT_STATUS", "100")))
 ''')
         self.write_stub(self.binary_directory / "sudo", '''
 sys.exit(subprocess.run(sys.argv[1:], env={**os.environ, "TEST_AS_SUDO": "yes"}).returncode)
@@ -194,17 +206,18 @@ Path("injectived").write_text("#!/bin/sh\\nexit 0\\n")
                     self.assertEqual(base["env"]["SETUP_DOCKER"], docker)
                     self.assertEqual(base["env"]["SETUP_SSH"], ssh)
 
-    def test_full_setup_has_one_apt_update_upgrade_and_install(self):
+    def test_full_setup_has_one_apt_update_upgrade_download_and_install(self):
         self.use_real_setup_children_with_mocked_commands()
         result = self.run_script(self.entry)
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = self.commands()
         apt = [command for command in commands if command["step"] == "apt-get"]
         stages = [
+            "download" if "--download-only" in command["args"] else
             next(argument for argument in command["args"] if argument in ("update", "upgrade", "install"))
             for command in apt
         ]
-        self.assertEqual(stages, ["update", "upgrade", "install"])
+        self.assertEqual(stages, ["update", "upgrade", "download", "install"])
         self.assertFalse(any(command["step"] == "apt" for command in commands))
         self.assertTrue(any(command["step"] == "gradlew" and command["args"] == ["build"] for command in commands))
         self.assertTrue(any(command["step"] == "injectived" for command in commands))
@@ -215,6 +228,41 @@ Path("injectived").write_text("#!/bin/sh\\nexit 0\\n")
         result = self.run_script(self.entry, TEST_FAIL_APT_STAGE="install")
         self.assertEqual(result.returncode, 100)
         commands = self.commands()
+        self.assertFalse(any(command["step"] in ("gradlew", "wget", "npm", "docker") for command in commands))
+        self.assertFalse(any(command["step"] == "python3" and command["args"][:2] == ["-m", "venv"] for command in commands))
+        self.assertNotIn("Installed basic packages.", result.stdout)
+
+    def test_transient_download_failure_recovers_before_full_setup_continues(self):
+        self.use_real_setup_children_with_mocked_commands()
+        result = self.run_script(
+            self.entry, TEST_FAIL_APT_STAGE="download", TEST_APT_FAIL_ATTEMPTS="1",
+            TEST_APT_ERROR="E: Failed to fetch http://mirror.example.invalid/package.deb  500 Internal Server Error",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        commands = self.commands()
+        apt = [command for command in commands if command["step"] == "apt-get"]
+        self.assertEqual(len(apt), 5)
+        self.assertEqual(sum("--download-only" in command["args"] for command in apt), 2)
+        self.assertEqual(sum(command["args"][-1:] == ["update"] for command in apt), 1)
+        self.assertEqual(sum("upgrade" in command["args"] for command in apt), 1)
+        self.assertEqual(sum("install" in command["args"] and "--download-only" not in command["args"] for command in apt), 1)
+        self.assertEqual([command["args"] for command in commands if command["step"] == "sleep"], [["10"]])
+        self.assertTrue(any(command["step"] == "gradlew" for command in commands))
+        self.assertTrue(any(command["step"] == "docker" for command in commands))
+
+    def test_exhausted_download_failure_stops_before_apply_or_later_setup(self):
+        self.use_real_setup_children_with_mocked_commands()
+        result = self.run_script(
+            self.entry, TEST_FAIL_APT_STAGE="download",
+            TEST_APT_ERROR="E: Failed to fetch http://mirror.example.invalid/package.deb  503 Service Unavailable",
+        )
+        self.assertEqual(result.returncode, 100)
+        commands = self.commands()
+        apt = [command for command in commands if command["step"] == "apt-get"]
+        self.assertEqual(len(apt), 5)
+        self.assertEqual(sum("--download-only" in command["args"] for command in apt), 3)
+        self.assertFalse(any("install" in command["args"] and "--download-only" not in command["args"] for command in apt))
+        self.assertEqual([command["args"] for command in commands if command["step"] == "sleep"], [["10"], ["10"]])
         self.assertFalse(any(command["step"] in ("gradlew", "wget", "npm", "docker") for command in commands))
         self.assertFalse(any(command["step"] == "python3" and command["args"][:2] == ["-m", "venv"] for command in commands))
         self.assertNotIn("Installed basic packages.", result.stdout)
