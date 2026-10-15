@@ -13,6 +13,19 @@ source scripts/CW20/load-env.sh
 
 同じ Bash で、トークン情報・初期残高・アドレス・出力ファイル名を環境変数に設定する。必要な値は空の二重引用符の間に入力する。空欄時の動作は各コメントを参照する。
 
+各環境変数は、生成する JSON の項目またはファイルの保存先に次のように対応する。
+
+| 環境変数 | JSON の項目・保存先 | 設定する内容 |
+| --- | --- | --- |
+| `TOKEN_NAME` | `name` | トークンの名称 |
+| `TOKEN_SYMBOL` | `symbol` | トークンのシンボル |
+| `TOKEN_DECIMALS` | `decimals` | 小数桁数 |
+| `INITIAL_BALANCE` | `initial_balances[].amount` | 最小単位で指定する初期残高 |
+| `CREATOR_ADDR` | `initial_balances[].address`・`mint.minter` | 初期残高の受取先と追加発行者のアドレス |
+| `OUTPUT_FILE` | JSON ファイルの保存先 | 出力ファイル名またはパス |
+
+`CREATOR_ADDR` が空欄の場合、`KEY_NAME` で指定した鍵と `KEYRING_BACKEND` で指定した保存方式を使ってアドレスを取得する。
+
 ```bash
 # トークンの名称を入力する。空欄の場合は My Token を使う。
 export TOKEN_NAME=""

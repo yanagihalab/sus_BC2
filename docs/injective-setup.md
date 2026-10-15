@@ -573,6 +573,22 @@ injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "${SEND_AMOUNT}${DENOM}" \
 
 署名者とガス上限を設定して CW20 用の環境変数を読み込み、署名者のアドレスと WASM ファイルのパスを表示する。その後、WASM をチェーンへ登録する。
 
+この手順以降で共通して使う環境変数は、次の設定に対応する。接続先と鍵の設定は、手順 1 の値を引き継ぐ。
+
+| 環境変数 | 対応する設定値・用途 |
+| --- | --- |
+| `KEY_NAME` | 操作に署名するウォレットの鍵名。`--from` に渡す |
+| `KEYRING_BACKEND` | 鍵の保存方式。`--keyring-backend` に渡す |
+| `CHAIN_ID` | 接続するチェーンの ID。`--chain-id` に渡す |
+| `NODE` | 接続先の RPC URL。`--node` に渡す |
+| `GAS_PRICES` | ガス単価。`--gas-prices` に渡す |
+| `GAS` | ガス上限。`--gas` に渡す。コード登録では `3000000`、手順 7.4 以降では `300000` を指定する |
+| `MY_ADDR` | 手順 2 で取得した自分のウォレットアドレス。下の例で `SENDER_ADDR` と `CREATOR_ADDR` に設定する |
+| `SENDER_ADDR` | 自分のアドレス。署名者の表示、残高照会、ミントの受取先に使う。署名に使う鍵は `KEY_NAME` で指定する |
+| `CREATOR_ADDR` | 初期残高の受取先と追加発行者（minter）に設定するアドレス |
+| `WASM_PATH` | チェーンに登録する WASM ファイルのパス。`wasm store` に渡す |
+| `CONFIRM_TX` | 補助スクリプトで書き込み処理を実行するための指定。実行時に `yes` を渡す |
+
 ```bash
 export GAS=3000000
 export SENDER_ADDR="$MY_ADDR"
@@ -594,7 +610,7 @@ WASM 登録で返された TxHash を使い、登録が成功したことを確�
 check_tx ""
 ```
 
-成功した登録結果の `events` から `code_id` を読み取り、初期化に使う `CODE_ID` に設定する。
+成功した登録結果の `events` から `code_id` を読み取り、初期化に使う `CODE_ID` に設定する。`CODE_ID` は登録済みの WASM コードを識別する番号で、手順 7.4 の `wasm instantiate` に渡す。
 
 ```bash
 # 成功したトランザクションの events にある code_id を読み取り、二重引用符の間に入力してから実行する。
@@ -604,6 +620,17 @@ export CODE_ID=""
 ### 7.3. 初期化メッセージを作成する
 
 トークンの名称・シンボル・小数桁数・初期残高を指定して `instantiate_msg.json` を生成し、`jq` で内容を表示する。
+
+各変数と、生成する JSON の設定値の対応は次のとおりである。
+
+| 環境変数 | 対応する JSON 項目・用途 | この例の値 |
+| --- | --- | --- |
+| `TOKEN_NAME` | `name`：トークンの名称 | `My Token` |
+| `TOKEN_SYMBOL` | `symbol`：トークンのシンボル | `MTK` |
+| `TOKEN_DECIMALS` | `decimals`：表示時の小数桁数 | `6` |
+| `INITIAL_BALANCE` | `initial_balances[].amount`：最小単位での初期残高 | `1000000`（小数桁数 `6` では `1 MTK`） |
+| `CREATOR_ADDR` | `initial_balances[].address`：初期残高の受取先、`mint.minter`：追加発行者のアドレス | 手順 7.1 で設定した自分の `MY_ADDR` |
+| `OUTPUT_FILE` | 生成した JSON の保存先ファイル名 | `instantiate_msg.json` |
 
 ```bash
 # 必要に応じて、名称・シンボル・小数桁数・初期残高を変更する。
@@ -636,7 +663,7 @@ check_tx ""
 
 ### 7.5. コントラクトアドレスを設定する
 
-手順 7.4 の成功した初期化結果からコントラクトアドレスを読み取り、以降の照会・送金・ミントに使う `CONTRACT_ADDR` に設定する。
+手順 7.4 の成功した初期化結果からコントラクトアドレスを読み取り、以降の照会・送金・ミントに使う `CONTRACT_ADDR` に設定する。`CONTRACT_ADDR` は、`wasm contract-state smart` と `wasm execute` の操作対象を指定する。
 
 ```bash
 # 成功したトランザクションの events にある _contract_address または contract_address を読み取り、二重引用符の間に入力してから実行する。
@@ -645,7 +672,7 @@ export CONTRACT_ADDR=""
 
 ### 7.6. トークン情報と残高を確認する
 
-1つ目のコマンドで CW20 トークンの情報を、2つ目で自分のアドレス（`SENDER_ADDR`）の CW20 トークン残高を照会する。
+`CONTRACT_ADDR` のコントラクトに対し、1つ目のコマンドで CW20 トークンの情報を、2つ目で自分のアドレス（`SENDER_ADDR`）の CW20 トークン残高を照会する。
 
 ```bash
 injectived q wasm contract-state smart "$CONTRACT_ADDR" \
@@ -656,7 +683,7 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 
 ### 7.7. CW20 トークンを送金する
 
-CW20 トークンの受取アドレスを設定する。
+CW20 トークンの受取アドレスを `RECIPIENT_ADDR` に設定する。
 
 ```bash
 # 二重引用符の間に実際の受取アドレスを入力してから実行する。
@@ -664,6 +691,12 @@ export RECIPIENT_ADDR=""
 ```
 
 設定した宛先へ送金する。
+
+| 環境変数 | 対応する送金の設定値 |
+| --- | --- |
+| `CONTRACT_ADDR` | 操作対象の CW20 コントラクトのアドレス |
+| `RECIPIENT_ADDR` | `transfer.recipient`：トークンの受取アドレス |
+| `CW20_SEND_AMOUNT` | `transfer.amount`：最小単位での送金量。この例は `1000000`（小数桁数 `6` では `1 MTK`） |
 
 ```bash
 # CW20 の送金量を最小単位で指定する。必要に応じて値を変更する。
@@ -692,6 +725,12 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 ### 7.8. CW20 トークンをミントする
 
 初期化メッセージで minter に設定した `KEY_NAME` の鍵で実行する。`CW20_MINT_AMOUNT` で指定した数量を発行し、`SENDER_ADDR` に付与する。
+
+| 環境変数 | 対応するミントの設定値 |
+| --- | --- |
+| `CONTRACT_ADDR` | 操作対象の CW20 コントラクトのアドレス |
+| `SENDER_ADDR` | `mint.recipient`：発行したトークンの受取アドレス |
+| `CW20_MINT_AMOUNT` | `mint.amount`：最小単位での発行量。この例は `1000000`（小数桁数 `6` では `1 MTK`） |
 
 ```bash
 # CW20 のミント量を最小単位で指定する。必要に応じて値を変更する。
@@ -724,6 +763,16 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 
 CW20 用の `load-env.sh` は共通の鍵・接続設定に加え、次の保存先と操作用の変数を設定する。
 `GAS` と同様に、`SENDER_ADDR`、`CODE_ID`、`CONTRACT_ADDR` などの既存値は保持される。鍵や対象コントラクトを変えた場合は、対応する値を設定し直してから読み込む。
+
+WASM ファイルのパスを組み立てる変数は、次の設定に対応する。
+
+| 環境変数 | 対応する設定値 | 未設定または空欄の場合の値 |
+| --- | --- | --- |
+| `WORKDIR` | CW20 サンプルを配置する作業ディレクトリ | `$HOME/temp` |
+| `CW_PLUS_DIR` | `cw-plus` ソースのディレクトリ | `$WORKDIR/cw-plus` |
+| `WASM_PATH` | 登録する WASM ファイルのパス | `$CW_PLUS_DIR/artifacts/cw20_base.wasm` |
+
+`HOME` は、現在のユーザーのホームディレクトリを表す。
 
 ```bash
 export GAS="${GAS:-300000}"
