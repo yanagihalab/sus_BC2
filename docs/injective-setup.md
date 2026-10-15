@@ -59,12 +59,6 @@ export RECIPIENT_ADDR="inj1..."
 
 後続の INJ・TokenFactory・CW20 の送金では、この `RECIPIENT_ADDR` を使う。
 
-自分のアドレスを受取先に戻す場合は、次を実行する。
-
-```bash
-export RECIPIENT_ADDR="$MY_ADDR"
-```
-
 <details>
 <summary>補足：環境変数の読み込みとウォレット作成のコマンド</summary>
 
@@ -125,26 +119,26 @@ injectived query bank balances "$MY_ADDR" \
   --node="$NODE" --chain-id="$CHAIN_ID" --output json | jq
 ```
 
-## 4. 自分のウォレットへ INJ を送金する
+## 4. 別の宛先へ INJ を送金する
 
-手順 2 で設定した `RECIPIENT_ADDR` へ `0.001 INJ` を送金する。初期設定の宛先は自分の `MY_ADDR` である。別の宛先へ送る場合は、手順 2.1 で受取アドレスを設定する。
+初期設定の宛先は自分の `MY_ADDR` である。この手順では別の宛先へ `0.001 INJ` を送金するため、`inj1...` を実際の受取アドレスに置き換えて `RECIPIENT_ADDR` に設定する。
 
 ```bash
+export RECIPIENT_ADDR="inj1..."
 export AMOUNT="1000000000000000inj"
 export BANK_SEND_GAS=200000
 CONFIRM_SEND=yes bash ./scripts/injectived/bank-send.sh
 ```
 
-返された TxHash を控え、次の手順で送金結果を確認する。
+返された TxHash を控え、次の手順で送金結果を確認する。この受取先の設定は後続の TokenFactory・CW20 の送金にも引き継がれる。
 
 <details>
 <summary>補足：bank-send.sh が実行する送金コマンド</summary>
 
-送信元の鍵、送金先、送金量を指定して、次のコマンドを実行する。初期設定では自分のアドレスを指定する。
+送信元の鍵、手順 4 で設定した受取アドレス、送金量を使って、次のコマンドを実行する。
 
 ```bash
-RECIPIENT_ADDR="${RECIPIENT_ADDR:-$MY_ADDR}"
-AMOUNT="100000000inj"
+AMOUNT="1000000000000000inj"
 BANK_SEND_GAS="${BANK_SEND_GAS:-${GAS:-200000}}"
 injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "$AMOUNT" \
   --from="$KEY_NAME" \
@@ -162,7 +156,7 @@ injectived tx bank send "$KEY_NAME" "$RECIPIENT_ADDR" "$AMOUNT" \
 `--broadcast-mode sync` はトランザクションを送信して応答を受け取る方式で、ブロックへの取り込み結果は TxHash で別途確認する。
 `-y` は CLI の確認を自動承認する指定である。
 `CONFIRM_SEND=yes` は補助スクリプト内の実行条件であり、直接 `injectived` を実行する場合のオプションではない。
-`inj` は INJ の最小単位で、`1000000000000000000inj` が `1 INJ` に相当する。過去の送金例で使った `1000000000000000inj` は `0.001 INJ` である。送金量は使用する `AMOUNT` の値で指定する。
+`inj` は INJ の最小単位で、`1000000000000000000inj` が `1 INJ` に相当する。この例の `1000000000000000inj` は `0.001 INJ` である。送金量は使用する `AMOUNT` の値で指定する。
 
 </details>
 
@@ -365,7 +359,7 @@ bash ./setup/normal/07-tokenfactory-mtk.sh balance
 
 ### 6.5. MTK を送金し、受取先の残高を確認する
 
-初期設定では自分のウォレットへ送金する。宛先は手順 2 で設定した `RECIPIENT_ADDR` を使う。
+宛先は `RECIPIENT_ADDR` を使う。手順 4 で別の受取アドレスを設定した場合は、その宛先へ送金する。
 
 ```bash
 export SEND_AMOUNT=1000000
@@ -490,7 +484,7 @@ injectived query bank balances "$CREATOR_ADDR" \
   --node="$NODE" --chain-id="$CHAIN_ID" -o json | jq
 ```
 
-送金は、宛先と最小単位の数量を設定してから実行する。初期設定の宛先は自分のアドレスである。小数桁数が `6` の場合、既定の `SEND_AMOUNT=1000000` は `1 MTK` に相当する。
+送金は、現在の `RECIPIENT_ADDR` と最小単位の数量を使って実行する。手順 4 で別の宛先を設定した場合は、その設定を引き継ぐ。小数桁数が `6` の場合、既定の `SEND_AMOUNT=1000000` は `1 MTK` に相当する。
 
 ```bash
 RECIPIENT_ADDR="${RECIPIENT_ADDR:-$CREATOR_ADDR}"
@@ -586,7 +580,7 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 
 ### 7.7. CW20 トークンを送金する
 
-初期設定では自分のウォレットへ送金する。宛先は手順 2 で設定した `RECIPIENT_ADDR` を使う。
+宛先は `RECIPIENT_ADDR` を使う。手順 4 で別の受取アドレスを設定した場合は、その宛先へ送金する。
 
 ```bash
 export CW20_SEND_AMOUNT=1000000
@@ -714,7 +708,7 @@ injectived q wasm contract-state smart "$CONTRACT_ADDR" \
 
 #### 送金
 
-送金先と送金量を設定してから実行する。初期設定の宛先は自分のアドレスである。数量は最小単位で指定し、decimals が `6` の場合、`1000000` が `1 MTK` に相当する。
+送金には現在の `RECIPIENT_ADDR` を使い、手順 4 で設定した宛先を引き継ぐ。数量は最小単位で指定し、decimals が `6` の場合、`1000000` が `1 MTK` に相当する。
 
 ```bash
 RECIPIENT_ADDR="${RECIPIENT_ADDR:-$SENDER_ADDR}"
