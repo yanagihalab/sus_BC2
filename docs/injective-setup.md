@@ -672,6 +672,8 @@ injectived tx wasm execute "$CONTRACT_ADDR" \
 check_tx ""
 ```
 
+ミントの成功を確認したら、発行先アドレス（`SENDER_ADDR`）の CW20 トークン残高を確認する。
+
 ```bash
 injectived q wasm contract-state smart "$CONTRACT_ADDR" \
   '{"balance":{"address":"'"$SENDER_ADDR"'"}}' --node "$NODE" --output json | jq
