@@ -127,6 +127,19 @@ APT による更新とパッケージ導入は `00-install-kali-packages.sh` に
 パスワードの入力中は画面に文字が表示されないが、実際には入力されている。
 この初回設定は、環境構築スクリプトを実行する前に済ませる。
 
+#### Kali のパッケージを更新し、基本ツールを導入する（Bash で実行）
+
+リポジトリ取得後、パッケージの更新と基本ツールの導入を個別に行う場合は、Kali Linux のターミナルで次を実行する。
+
+```bash
+cd ~/temp/sus_BC2
+bash ./setup/normal/00-install-kali-packages.sh
+```
+
+先頭の `bash` で実行するシェルを明示しているため、現在のターミナルが Zsh でも、このスクリプトは Bash で実行される。
+パッケージ一覧の更新、インストール済みパッケージの更新、基本ツールの導入、各ツールのバージョン確認を順に行う。標準設定では Docker も導入する。
+この処理は、主手順 3 の一括セットアップにも含まれる。以下では、スクリプト内のコマンドと役割を説明する。
+
 #### Kali Linux の更新
 
 一括セットアップでは、次のコマンドを実行する。
@@ -180,7 +193,7 @@ sudo apt-get -o Acquire::Retries=5 install -y "${PACKAGES[@]}"
 | `docker.io` | Docker Engine。`SETUP_DOCKER=yes` の場合に導入 |
 | `openssh-server` | SSH サーバー。`SETUP_SSH=yes` の場合に導入 |
 
-各スクリプトを個別に実行する場合も、先に `./setup/normal/00-install-kali-packages.sh` を実行して必要なパッケージを導入する。SSH サーバーの個別設定には、後述の `SETUP_SSH=yes` を使う準備が必要である。
+各スクリプトを個別に実行する場合も、先に `bash ./setup/normal/00-install-kali-packages.sh` を実行して必要なパッケージを導入する。SSH サーバーの個別設定には、後述の `SETUP_SSH=yes` を使う準備が必要である。
 
 スクリプトは Node.js のメジャーバージョンを確認し、20 未満の場合は停止する。
 導入後、次のコマンドで各ツールのバージョンを確認する。
@@ -427,7 +440,7 @@ SETUP_SSH=yes ./setup/normal/wsl-kali-experiment-env.sh
 SSH の設定スクリプトを個別に実行する場合は、先に次のコマンドでパッケージを準備する。
 
 ```bash
-SETUP_SSH=yes ./setup/normal/00-install-kali-packages.sh
+SETUP_SSH=yes bash ./setup/normal/00-install-kali-packages.sh
 ```
 
 導入済みの SSH サーバーに対して行う設定は次のとおりである。
