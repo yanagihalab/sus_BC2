@@ -328,14 +328,14 @@ export JAVA_HOME
 export PATH="$JAVA_HOME/bin:$PATH"
 cd ~/temp/simblock
 chmod +x gradlew
-./gradlew clean
-./gradlew build
+bash ./gradlew clean
+bash ./gradlew build
 ```
 
 `JAVA_HOME` は使用する JDK の場所を指定し、`PATH` の先頭へその `bin/` を追加することで Java 11 を選択する。
 `chmod +x gradlew` は Gradle Wrapper に実行権限を付ける。
 `clean` は前回のビルド出力を削除し、`build` はソースコードをビルドする。
-SimBlock のシミュレーション実行は、後述の `./gradlew :simulator:run` で行う。
+SimBlock のシミュレーション実行は、後述の `bash ./gradlew :simulator:run` で行う。
 
 #### Docker の起動と確認
 
@@ -519,7 +519,7 @@ SimBlock は Day3 で使用する。ソースコードの取得とビルドは�
 export JAVA_HOME="$(find /usr/lib/jvm -maxdepth 1 -type d -name 'java-11-openjdk-*' | sort | head -n 1)"
 export PATH="$JAVA_HOME/bin:$PATH"
 cd ~/temp/simblock
-./gradlew :simulator:run
+bash ./gradlew :simulator:run
 ```
 
 ## ブロックチェーン実験
@@ -653,7 +653,7 @@ MacBook では次を実行する。
 
 ```bash
 cd ~/temp/sus_BC2
-./setup/macbook/macbook-docker-env.sh
+bash ./setup/macbook/macbook-docker-env.sh
 ```
 
 対応する環境構築スクリプト: `./setup/macbook/macbook-docker-env.sh`
