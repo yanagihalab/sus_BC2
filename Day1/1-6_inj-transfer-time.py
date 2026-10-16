@@ -2,11 +2,22 @@
 
 import argparse
 import math
-import os
 import re
 import subprocess
 import sys
 import time
+
+
+# 設定：作成済みウォレットの鍵名・保存方式と、送金先・数量を指定する。
+KEY_NAME = "testwallet"
+KEYRING_BACKEND = "test"
+CHAIN_ID = "injective-888"
+NODE = "https://injective-testnet-rpc.publicnode.com:443"
+GAS_PRICES = "500000000inj"
+BANK_SEND_GAS = "200000"
+AMOUNT = "1000000000000000inj"  # 0.001 INJ。
+RECIPIENT_ADDR = ""  # 二重引用符の間に実際の受取アドレスを入力する。
+CONFIRM_SEND = False  # 設定を確認し、送金する場合は True に変更する。
 
 
 def main(argv=None):
@@ -16,30 +27,22 @@ def main(argv=None):
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("--timeout must be a finite positive number.")
 
-    # 手順 1・2 の KEY_NAME と KEYRING_BACKEND で、作成済みのウォレットを使う。
-    defaults = {
-        "KEY_NAME": "testwallet", "KEYRING_BACKEND": "test",
-        "CHAIN_ID": "injective-888", "NODE": "https://injective-testnet-rpc.publicnode.com:443",
-        "GAS_PRICES": "500000000inj", "BANK_SEND_GAS": "200000",
-        "AMOUNT": "1000000000000000inj", "RECIPIENT_ADDR": "",
-    }
-    settings = {name: os.environ.get(name) or default for name, default in defaults.items()}
-    for name, pattern in (
-        ("RECIPIENT_ADDR", r"inj1\S*"), ("AMOUNT", r"[1-9][0-9]*inj"),
-        ("BANK_SEND_GAS", r"[1-9][0-9]*"),
+    for name, value, pattern in (
+        ("RECIPIENT_ADDR", RECIPIENT_ADDR, r"inj1\S*"), ("AMOUNT", AMOUNT, r"[1-9][0-9]*inj"),
+        ("BANK_SEND_GAS", BANK_SEND_GAS, r"[1-9][0-9]*"),
     ):
-        if not re.fullmatch(pattern, settings[name]):
-            parser.error(f"Set {name} to a valid value.")
-    if os.environ.get("CONFIRM_SEND") != "yes":
-        print("Run with CONFIRM_SEND=yes to measure one transfer.", file=sys.stderr)
+        if not re.fullmatch(pattern, str(value)):
+            parser.error(f"Set {name} at the top of this file to a valid value.")
+    if CONFIRM_SEND is not True:
+        print("Set CONFIRM_SEND = True at the top of this file to measure one transfer.", file=sys.stderr)
         return 1
 
     command = [
         "injectived", "tx", "bank", "send",
-        settings["KEY_NAME"], settings["RECIPIENT_ADDR"], settings["AMOUNT"],
-        f'--from={settings["KEY_NAME"]}', f'--keyring-backend={settings["KEYRING_BACKEND"]}',
-        f'--chain-id={settings["CHAIN_ID"]}', f'--node={settings["NODE"]}',
-        f'--gas-prices={settings["GAS_PRICES"]}', f'--gas={settings["BANK_SEND_GAS"]}',
+        KEY_NAME, RECIPIENT_ADDR, AMOUNT,
+        f"--from={KEY_NAME}", f"--keyring-backend={KEYRING_BACKEND}",
+        f"--chain-id={CHAIN_ID}", f"--node={NODE}",
+        f"--gas-prices={GAS_PRICES}", f"--gas={BANK_SEND_GAS}",
         "--broadcast-mode", "sync", "--output", "json", "-y",
     ]
     # CLI の応答（TxHash を含む）は、そのまま端末に表示する。

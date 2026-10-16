@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -61,8 +62,13 @@ sys.exit(response["exit_code"])
             "PATH": str(self.binary_directory), "HOME": str(self.home),
             "PYTHONDONTWRITEBYTECODE": "1",
             "MOCK_CALLS": str(self.calls_file), "MOCK_RESPONSE": str(self.response_file),
-            "NODE": "https://rpc.example.invalid:443",
-            "RECIPIENT_ADDR": "inj1mockrecipient", "CONFIRM_SEND": "yes",
+        }
+        self.settings = {
+            "KEY_NAME": "testwallet", "KEYRING_BACKEND": "test",
+            "CHAIN_ID": "injective-888", "NODE": "https://injective-testnet-rpc.publicnode.com:443",
+            "GAS_PRICES": "500000000inj", "BANK_SEND_GAS": "200000",
+            "AMOUNT": "1000000000000000inj", "RECIPIENT_ADDR": "inj1mockrecipient",
+            "CONFIRM_SEND": True,
         }
         self.write_response()
 
@@ -84,9 +90,22 @@ sys.exit(response["exit_code"])
             return []
         return [json.loads(line) for line in self.calls_file.read_text().splitlines()]
 
-    def run_script(self, *, environment=None, arguments=()):
+    def configured_source(self, settings):
+        source = SCRIPT.read_text()
+        for name, value in {**self.settings, **(settings or {})}.items():
+            source, count = re.subn(
+                rf"^{name}\s*=.*$", lambda match: f"{name} = {value!r}",
+                source, count=1, flags=re.MULTILINE,
+            )
+            self.assertEqual(count, 1, f"Expected one editable source constant: {name}")
+        configured = self.directory / "configured-inj-transfer-time.py"
+        configured.write_text(source)
+        return configured
+
+    def run_script(self, *, settings=None, environment=None, arguments=(), original=False):
+        script = SCRIPT if original else self.configured_source(settings)
         result = subprocess.run(
-            [str(Path(sys.executable).resolve()), str(SCRIPT), *arguments],
+            [str(Path(sys.executable).resolve()), str(script), *arguments],
             cwd=self.workspace, env={**self.environment, **(environment or {})},
             capture_output=True, timeout=15,
         )
@@ -98,6 +117,7 @@ sys.exit(response["exit_code"])
     def run_main(self, *, cli_status=0, error=None, elapsed=0.125, arguments=()):
         stdout, stderr = io.StringIO(), io.StringIO()
         with mock.patch.dict(os.environ, self.environment, clear=True), \
+                mock.patch.multiple(MEASUREMENT, **self.settings), \
                 redirect_stdout(stdout), redirect_stderr(stderr), \
                 mock.patch.object(MEASUREMENT.time, "perf_counter", side_effect=[10.0, 10.0 + elapsed]) as clock, \
                 mock.patch.object(
@@ -134,21 +154,27 @@ sys.exit(response["exit_code"])
         ])
         for flag in (
             "--from=testwallet", "--keyring-backend=test", "--chain-id=injective-888",
-            "--node=https://rpc.example.invalid:443", "--gas-prices=500000000inj", "--gas=200000",
+            "--node=https://injective-testnet-rpc.publicnode.com:443", "--gas-prices=500000000inj", "--gas=200000",
         ):
             self.assertIn(flag, arguments)
         self.assertEqual(arguments[arguments.index("--broadcast-mode") + 1], "sync")
         self.assertEqual(arguments[arguments.index("--output") + 1], "json")
         self.assertTrue("-y" in arguments or "--yes" in arguments)
 
-    def test_custom_settings_are_passed_as_separate_arguments(self):
+    def test_source_settings_are_passed_as_separate_arguments_and_override_environment(self):
         settings = {
             "KEY_NAME": "research wallet", "KEYRING_BACKEND": "file", "CHAIN_ID": "mock-chain",
             "NODE": "https://other.example.invalid:443", "GAS_PRICES": "700000000inj",
             "BANK_SEND_GAS": "234567", "AMOUNT": "2000000000000000inj",
             "RECIPIENT_ADDR": "inj1differentrecipient",
         }
-        result = self.run_script(environment=settings)
+        environment = {
+            "KEY_NAME": "environment-wallet", "KEYRING_BACKEND": "test", "CHAIN_ID": "environment-chain",
+            "NODE": "https://env.example.invalid:443", "GAS_PRICES": "900000000inj",
+            "BANK_SEND_GAS": "999999", "AMOUNT": "9000000000000000inj",
+            "RECIPIENT_ADDR": "inj1environmentrecipient", "CONFIRM_SEND": "no",
+        }
+        result = self.run_script(settings=settings, environment=environment)
         self.assertEqual(result.returncode, 0, result.stderr)
         arguments, = self.calls()
         self.assertEqual(arguments[3:6], [settings["KEY_NAME"], settings["RECIPIENT_ADDR"], settings["AMOUNT"]])
@@ -159,9 +185,19 @@ sys.exit(response["exit_code"])
             self.assertIn(f"--{flag}={settings[variable]}", arguments)
 
     def test_confirmation_guard_never_calls_the_cli(self):
-        result = self.run_script(environment={"CONFIRM_SEND": ""})
+        result = self.run_script(settings={"CONFIRM_SEND": False}, environment={"CONFIRM_SEND": "yes"})
         self.assertEqual(result.returncode, 1)
-        self.assertIn(b"CONFIRM_SEND=yes", result.stderr)
+        self.assertIn(b"CONFIRM_SEND", result.stderr)
+        self.assertEqual(self.calls(), [])
+        self.assertNotIn(b"Response time:", result.stdout)
+
+    def test_unedited_source_preserves_safe_defaults_and_ignores_environment_confirmation(self):
+        expected = {**self.settings, "RECIPIENT_ADDR": "", "CONFIRM_SEND": False}
+        self.assertEqual({name: getattr(MEASUREMENT, name) for name in expected}, expected)
+        result = self.run_script(
+            original=True, environment={"RECIPIENT_ADDR": "inj1environmentrecipient", "CONFIRM_SEND": "yes"},
+        )
+        self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.calls(), [])
         self.assertNotIn(b"Response time:", result.stdout)
 
@@ -173,9 +209,9 @@ sys.exit(response["exit_code"])
             ({}, ("--timeout", "0")), ({}, ("--timeout", "nan")), ({}, ("--timeout", "inf")),
             ({}, ("--output", "unused.csv")),
         ]
-        for environment, arguments in cases:
-            with self.subTest(environment=environment, arguments=arguments):
-                result = self.run_script(environment=environment, arguments=arguments)
+        for settings, arguments in cases:
+            with self.subTest(settings=settings, arguments=arguments):
+                result = self.run_script(settings=settings, arguments=arguments)
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertEqual(self.calls(), [])
 
@@ -225,7 +261,7 @@ sys.exit(response["exit_code"])
 
     def test_help_works_from_an_unrelated_directory_without_cli_calls(self):
         result = self.run_script(
-            arguments=("--help",), environment={"CONFIRM_SEND": "", "RECIPIENT_ADDR": ""},
+            arguments=("--help",), settings={"CONFIRM_SEND": False, "RECIPIENT_ADDR": ""},
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(b"--timeout", result.stdout)

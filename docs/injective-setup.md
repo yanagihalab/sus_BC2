@@ -225,53 +225,56 @@ txhash: 記録のTxHash
 
 ### 4.1. INJ 送金の TxHash 応答時間を計測する
 
-必須課題 1-6 の計測には、[1-6_inj-transfer-time.py](../Day1/1-6_inj-transfer-time.py) を使う。1回の実行で1回送金し、コマンドの起動直前から、TxHash を含む応答を受信してコマンドが終了するまでの秒数を表示する。
-計測値には CLI の起動・署名・RPC 通信・受付応答の待ち時間を含む。`sync` はトランザクションの受付結果を返す方式であり、ブロックへの取り込みは手順 5 または Explorer で確認する。[Cosmos SDK の同期送信処理](https://github.com/cosmos/cosmos-sdk/blob/v0.50.13/client/broadcast.go#L79-L93)
+必須課題 1-6 の計測には、[1-6_inj-transfer-time.py](../Day1/1-6_inj-transfer-time.py) を使う。1回の実行で1回送金し、CLI の起動直前から、TxHash を含む応答が表示されて CLI が終了するまでの秒数を表示する。
+計測値には CLI の起動・署名・RPC 通信・受付応答の待ち時間を含む。`sync` は受付結果を返す方式であり、ブロックへの取り込みが確定するまでの時間ではない。[Cosmos SDK の同期送信処理](https://github.com/cosmos/cosmos-sdk/blob/v0.50.13/client/broadcast.go#L79-L93)
 
-送信元には、手順 1・2 で作成したウォレットをそのまま使う。計測コードは、現在の Bash セッションの `KEY_NAME`（鍵名）と `KEYRING_BACKEND`（鍵の保存方式）を引き継ぐ。標準設定では `testwallet` と `test` を使う。
-ウォレットを作成した Kali Linux の同じユーザーで実行する。新しいターミナルを開いた場合は、手順 1・2 を実行し直し、作成済みのため `injectived keys add` の行は省略する。
+手順 1〜3 の準備を済ませ、ウォレットを作成した Kali Linux の同じユーザーで実行する。ソース冒頭の `KEY_NAME` と `KEYRING_BACKEND` を、作成時と同じ鍵名・保存方式に合わせる。計測用の設定はソースから読み込み、Bash の環境変数は引き継がない。手順 4 の通常送金の代わりに、この節の計測コマンドを使う。
 
-手順 1〜3 の準備を済ませ、手順 4 の受取アドレス設定まで実行する。送金は、この節の計測コマンドで行う。計測前に、送信元の鍵名・保存方式・アドレスと、共同実験者の受取アドレスを確認する。
+次はソース冒頭の編集箇所の抜粋である。ターミナルへの入力ではなく、ソースの同名の行を編集する。接続先などの設定は補足の表を参照する。
 
-```bash
-echo "KEY_NAME=$KEY_NAME"
-echo "KEYRING_BACKEND=$KEYRING_BACKEND"
-injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND"
-echo "RECIPIENT_ADDR=$RECIPIENT_ADDR"
+```python
+# 作成時の鍵名と保存方式に合わせる。以下は標準設定。
+KEY_NAME = "testwallet"
+KEYRING_BACKEND = "test"
+# 二重引用符の間に実際の受取アドレスを入力する。
+RECIPIENT_ADDR = ""
+# 送金量を inj 単位の文字列で指定する。この例は 0.001 INJ。
+AMOUNT = "1000000000000000inj"
+BANK_SEND_GAS = "200000"
+# 設定内容を確認し、引用符を付けず True に変更する。
+CONFIRM_SEND = True
 ```
 
-送金量とガス上限を設定し、計測付きで1回送金する。
+編集内容を保存し、計測付きで1回送金する。
 
 ```bash
-# 送金量を inj 単位で指定する。この例は 0.001 INJ。
-export AMOUNT="1000000000000000inj"
-export BANK_SEND_GAS=200000
-CONFIRM_SEND=yes python3 Day1/1-6_inj-transfer-time.py
+python3 Day1/1-6_inj-transfer-time.py
 ```
 
-CLI の JSON 応答にある `txhash` がその回の TxHash、末尾の `Response time` がコマンドの応答時間（秒）を表す。結果は端末に表示する。
-各回の TxHash で送金結果を確認してから、同じ計測コマンドを10回以上実行する。表示された TxHash と時間を報告書に記録し、CLI が正常に終了して応答の `code` が `0` で、TxHash を確認できた回の時間から平均を求める。
+CLI の JSON 応答にある `txhash` がその回の TxHash、末尾の `Response time` が応答時間（秒）を表す。結果は端末に表示され、CSV やログファイルには保存されない。
+各回の TxHash を手順 5 の `check_tx` に手入力するか、Explorer で送金結果を確認してから、計10回以上実行する。`check_tx` は手順 1 の接続設定を読み込み、手順 5 の関数を定義した Bash で使う。ソースにも同じ接続先を設定する。
+表示された TxHash と時間を報告書に記録し、CLI が正常に終了して応答の `code` が `0` で、TxHash を確認できた回の時間から平均を求める。
 
 <details>
 <summary>補足：計測コードの設定と処理順序</summary>
 
-計測コードは Python の標準ライブラリを使い、次の環境変数を送金コマンドに渡す。
+計測コードは Python の標準ライブラリを使い、ソース冒頭の変数を送金コマンドに渡す。数値を表す CLI の設定値にも引用符を付け、文字列として指定する。
 
-| 環境変数 | 対応する設定値 | 未設定または空欄の場合の値 |
-| --- | --- | --- |
-| `KEY_NAME` | 送信元の鍵名 | `testwallet` |
-| `KEYRING_BACKEND` | 鍵の保存方式。対話入力のない `test` を使う | `test` |
-| `CHAIN_ID` | 接続するチェーンの ID | `injective-888` |
-| `NODE` | 接続先の RPC URL | `https://injective-testnet-rpc.publicnode.com:443` |
-| `GAS_PRICES` | ガス単価 | `500000000inj` |
-| `BANK_SEND_GAS` | 送金のガス上限 | `200000` |
-| `AMOUNT` | 最小単位で指定する INJ の送金量 | `1000000000000000inj`（`0.001 INJ`） |
-| `RECIPIENT_ADDR` | 共同実験者の受取アドレス | 必ず設定する |
-| `CONFIRM_SEND` | 送金を実行する指定 | 実行時に `yes` を渡す |
+| ソース変数 | 設定値の意味 | 初期値 | 実行前の確認・必須の編集 |
+| --- | --- | --- | --- |
+| `KEY_NAME` | 送信元の鍵名 | `"testwallet"` | 作成時の鍵名に合わせる |
+| `KEYRING_BACKEND` | 鍵の保存方式 | `"test"` | 作成時の方式に合わせる。対話入力のない `test` を使う |
+| `CHAIN_ID` | 接続するチェーンの ID | `"injective-888"` | 手順 1 の接続先と合わせる |
+| `NODE` | 接続先の RPC URL | `"https://injective-testnet-rpc.publicnode.com:443"` | 手順 1 の接続先と合わせる |
+| `GAS_PRICES` | ガス単価 | `"500000000inj"` | 必要に応じて変更する |
+| `BANK_SEND_GAS` | 送金のガス上限 | `"200000"` | 必要に応じて変更する |
+| `AMOUNT` | 最小単位で指定する INJ の送金量 | `"1000000000000000inj"`（`0.001 INJ`） | 送金量を確認する |
+| `RECIPIENT_ADDR` | 共同実験者の受取アドレス | `""` | 実際の受取アドレスを必ず入力する |
+| `CONFIRM_SEND` | 送金を実行する指定 | `False` | 設定を確認し、`True` に変更する（引用符なし） |
 
 処理は次の順に実行する。
 
-1. 環境変数と CLI の制限時間を確認する。
+1. ソースの設定値と CLI の制限時間を確認する。
 2. `time.perf_counter()` で計測を始め、`injectived tx bank send` を `--broadcast-mode sync --output json -y` 付きで1回実行する。CLI の標準出力・標準エラーはそのまま端末に表示する。
 3. コマンドが終了した直後に計測を終え、経過秒数を `Response time` として表示する。
 
@@ -281,7 +284,7 @@ CLI の制限時間を変更する場合は、次のように指定する。
 
 ```bash
 # --timeout に制限時間を秒数で指定する。
-CONFIRM_SEND=yes python3 Day1/1-6_inj-transfer-time.py --timeout 60
+python3 Day1/1-6_inj-transfer-time.py --timeout 60
 ```
 
 </details>
@@ -493,6 +496,77 @@ check_tx ""
 injectived query bank balances "$RECIPIENT_ADDR" \
   --node="$NODE" --chain-id="$CHAIN_ID" --output json | jq
 ```
+
+### 6.6. TokenFactory トークン送金の TxHash 応答時間を計測する
+
+[1-7_tokenfactory-transfer-time.py](../Day1/1-7_tokenfactory-transfer-time.py) を使い、手順 4.1 の INJ 送金と同じ方法で応答時間を計測する。1回の実行で1回送金し、CLI の起動直前から、TxHash を含む応答が表示されて CLI が終了するまでの秒数を表示する。ブロックへの取り込みが確定するまでの時間ではない。
+
+手順 6.1〜6.4 の作成・ミント・残高確認を済ませ、手順 1・2 のウォレットを作成した Kali Linux の同じユーザーで実行する。作成時の鍵名・保存方式、作成済みトークンの完全な denom、受取アドレスをソース冒頭に設定する。計測用の設定は Bash の環境変数から引き継がない。手順 6.5 の通常送金の代わりに、この節の計測コマンドを使う。
+
+次はソース冒頭の編集箇所の抜粋である。ターミナルへの入力ではなく、ソースの同名の行を編集する。接続先などの設定は補足の表を参照する。
+
+```python
+# 作成時の鍵名と保存方式に合わせる。以下は標準設定。
+KEY_NAME = "testwallet"
+KEYRING_BACKEND = "test"
+# 作成済みトークンの完全な denom を二重引用符の間に入力する。
+DENOM = ""
+# 二重引用符の間に実際の受取アドレスを入力する。
+RECIPIENT_ADDR = ""
+# 送金量を最小単位の文字列で指定する。小数桁数が 6 の場合、この例は 1 MTK。
+SEND_AMOUNT = "1000000"
+GAS = "300000"
+# 設定内容を確認し、引用符を付けず True に変更する。
+CONFIRM_TX = True
+```
+
+編集内容を保存し、計測付きで1回送金する。
+
+```bash
+python3 Day1/1-7_tokenfactory-transfer-time.py
+```
+
+CLI の JSON 応答にある `txhash` がその回の TxHash、末尾の `Response time` が応答時間（秒）を表す。結果は端末に表示され、CSV やログファイルには保存されない。
+手順 1 の接続設定と手順 5 の関数を読み込んだ Bash で、`check_tx` にその回の TxHash を手入力して送金結果を確認する。ソースにも同じ接続先を設定する。
+
+```bash
+# 計測付きの TokenFactory 送金で返された TxHash を、二重引用符の間に入力してから実行する。
+check_tx ""
+```
+
+各回の送金結果を確認してから、計10回以上計測する。表示された TxHash と時間を報告書に記録し、CLI が正常に終了して応答の `code` が `0` で、TxHash を確認できた回の時間から平均を求める。
+
+<details>
+<summary>補足：TokenFactory 送金計測の設定と処理順序</summary>
+
+ソース冒頭の変数を送金コマンドに渡す。数値を表す CLI の設定値にも引用符を付け、文字列として指定する。INJ 計測用の `AMOUNT`・`BANK_SEND_GAS` は使用しない。
+
+| ソース変数 | 設定値の意味 | 初期値 | 実行前の確認・必須の編集 |
+| --- | --- | --- | --- |
+| `KEY_NAME` | 送信元の鍵名 | `"testwallet"` | 作成時の鍵名に合わせる |
+| `KEYRING_BACKEND` | 鍵の保存方式 | `"test"` | 作成時の方式に合わせる。対話入力のない `test` を使う |
+| `CHAIN_ID` | 接続するチェーンの ID | `"injective-888"` | 手順 1 の接続先と合わせる |
+| `NODE` | 接続先の RPC URL | `"https://injective-testnet-rpc.publicnode.com:443"` | 手順 1 の接続先と合わせる |
+| `GAS_PRICES` | ガス単価 | `"500000000inj"` | 必要に応じて変更する |
+| `GAS` | 送金のガス上限 | `"300000"` | 必要に応じて変更する |
+| `SEND_AMOUNT` | 最小単位で指定するトークンの送金量 | `"1000000"` | 残高と小数桁数に合わせる |
+| `DENOM` | 作成済みトークンの完全な denom | `""` | `factory/作成者アドレス/subdenom` を必ず入力する |
+| `RECIPIENT_ADDR` | トークンの受取アドレス | `""` | 実際の受取アドレスを必ず入力する |
+| `CONFIRM_TX` | 送金を実行する指定 | `False` | 設定を確認し、`True` に変更する（引用符なし） |
+
+計測コードは `DENOM` を生成しない。手順 6.1 で作成した denom をソースへ入力する。作成済みなら `create-denom` を再実行する必要はない。
+
+ソースの設定値と制限時間を確認した後、`time.perf_counter()` で計測を始め、`injectived tx bank send` に `SEND_AMOUNT` と `DENOM` を連結した数量を渡す。`--broadcast-mode sync --output json -y` 付きで1回実行し、標準出力・標準エラーをそのまま端末に表示する。コマンド終了直後に計測を終え、経過秒数を表示する。
+タイムアウト・中断の場合も、表示された応答を確認してから次の送金を行う。コードは送信の自動再試行や確定照会を行わない。
+
+CLI の制限時間を変更する場合は、次のように指定する。
+
+```bash
+# --timeout に制限時間を秒数で指定する。
+python3 Day1/1-7_tokenfactory-transfer-time.py --timeout 60
+```
+
+</details>
 
 各補助スクリプトの内部コマンドと設定値は、次の補足で確認できる。
 
@@ -818,6 +892,79 @@ check_tx ""
 injectived q wasm contract-state smart "$CONTRACT_ADDR" \
   '{"balance":{"address":"'"$SENDER_ADDR"'"}}' --node "$NODE" --output json | jq
 ```
+
+### 7.9. CW20 トークン送金の TxHash 応答時間を計測する
+
+[1-8_cw20-transfer-time.py](../Day1/1-8_cw20-transfer-time.py) を使い、INJ・TokenFactory と同じ方法で応答時間を計測する。1回の実行で1回送金し、CLI の起動直前から、TxHash を含む応答が表示されて CLI が終了するまでの秒数を表示する。ブロックへの取り込みが確定するまでの時間ではない。
+
+手順 1・2 のウォレットを作成した Kali Linux の同じユーザーで、手順 7.1〜7.6 で準備したコントラクトを使う。作成済みのウォレットやコントラクトを作り直す必要はない。手順 7.7 の通常送金の代わりに、この節の計測コマンドを使う。
+
+手順 7.3 の初期残高例と1回の初期送金量は、どちらも小数桁数 `6` で `1 MTK` である。10回以上送金できる残高を手順 7.6 で確認する。追加発行できる鍵を使う場合は、必要に応じて手順 7.8 の `CW20_MINT_AMOUNT` を調整して不足分を発行する。追加発行できない場合は、トークンを受け取るか、保有残高内で送金量を調整する。計測コードはミントを行わない。
+
+次はソース冒頭の編集箇所の抜粋である。ターミナルへの入力ではなく、ソースの同名の行を編集する。計測用の設定は Bash の環境変数から引き継がない。接続先などの設定は補足の表を参照する。
+
+```python
+# 作成時の鍵名と保存方式に合わせる。以下は標準設定。
+KEY_NAME = "testwallet"
+KEYRING_BACKEND = "test"
+# 手順 7.5 で確認した既存コントラクトのアドレスを二重引用符の間に入力する。
+CONTRACT_ADDR = ""
+# 二重引用符の間に実際の受取アドレスを入力する。
+RECIPIENT_ADDR = ""
+# 残高と計測回数に合わせ、送金量を最小単位の文字列で指定する。
+CW20_SEND_AMOUNT = "1000000"
+GAS = "300000"
+# 設定内容を確認し、引用符を付けず True に変更する。
+CONFIRM_TX = True
+```
+
+編集内容を保存し、計測付きで1回送金する。
+
+```bash
+python3 Day1/1-8_cw20-transfer-time.py
+```
+
+CLI の JSON 応答にある `txhash` がその回の TxHash、末尾の `Response time` が応答時間（秒）を表す。結果は端末に表示され、CSV やログファイルには保存されない。
+手順 1 の接続設定と手順 5 の関数を読み込んだ Bash で、`check_tx` にその回の TxHash を手入力して送金結果を確認する。ソースにも同じ接続先を設定する。
+
+```bash
+# 計測付きの CW20 送金で返された TxHash を、二重引用符の間に入力してから実行する。
+check_tx ""
+```
+
+各回の送金結果を確認してから、計10回以上計測する。表示された TxHash と時間を報告書に記録し、CLI が正常に終了して応答の `code` が `0` で、TxHash を確認できた回の時間から平均を求める。
+
+<details>
+<summary>補足：CW20 送金計測の設定と処理順序</summary>
+
+ソース冒頭の変数を送金コマンドに渡す。数値を表す CLI の設定値にも引用符を付け、文字列として指定する。INJ 用の `AMOUNT`・`BANK_SEND_GAS`、TokenFactory 用の `DENOM`・`SEND_AMOUNT` は使用しない。
+
+| ソース変数 | 設定値の意味 | 初期値 | 実行前の確認・必須の編集 |
+| --- | --- | --- | --- |
+| `KEY_NAME` | 送信元の鍵名 | `"testwallet"` | 作成時の鍵名に合わせる |
+| `KEYRING_BACKEND` | 鍵の保存方式 | `"test"` | 作成時の方式に合わせる。対話入力のない `test` を使う |
+| `CHAIN_ID` | 接続するチェーンの ID | `"injective-888"` | 手順 1 の接続先と合わせる |
+| `NODE` | 接続先の RPC URL | `"https://injective-testnet-rpc.publicnode.com:443"` | 手順 1 の接続先と合わせる |
+| `GAS_PRICES` | ガス単価 | `"500000000inj"` | 必要に応じて変更する |
+| `GAS` | 送金のガス上限 | `"300000"` | 必要に応じて変更する |
+| `CONTRACT_ADDR` | 操作する CW20 コントラクトのアドレス | `""` | 手順 7.5 で確認したアドレスを必ず入力する |
+| `RECIPIENT_ADDR` | `transfer.recipient`：トークンの受取アドレス | `""` | 実際の受取アドレスを必ず入力する |
+| `CW20_SEND_AMOUNT` | `transfer.amount`：最小単位での送金量 | `"1000000"` | 残高と小数桁数に合わせる |
+| `CONFIRM_TX` | 送金を実行する指定 | `False` | 設定を確認し、`True` に変更する（引用符なし） |
+
+`CONTRACT_ADDR` は計測コードのソースへ入力する。コードの再登録やコントラクトの再初期化は不要である。
+
+ソースの設定値と制限時間を確認した後、`transfer` メッセージを `json.dumps` で組み立てる。`time.perf_counter()` で計測を始め、`injectived tx wasm execute` を `--broadcast-mode sync --output json -y` 付きで1回実行する。送金分の INJ は添付せず、CLI の標準出力・標準エラーをそのまま端末に表示する。コマンド終了直後に計測を終え、経過秒数を表示する。
+タイムアウト・中断の場合も、表示された応答を確認してから次の送金を行う。コードは送信の自動再試行や確定照会を行わない。
+
+CLI の制限時間を変更する場合は、次のように指定する。
+
+```bash
+# --timeout に制限時間を秒数で指定する。
+python3 Day1/1-8_cw20-transfer-time.py --timeout 60
+```
+
+</details>
 
 <details>
 <summary>補足：CW20 の環境設定・コード登録・初期化・照会・送金・ミント</summary>
