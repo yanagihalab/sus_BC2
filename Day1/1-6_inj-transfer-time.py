@@ -16,7 +16,7 @@ def main(argv=None):
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("--timeout must be a finite positive number.")
 
-    # 既存の手順で設定した環境変数を使う。
+    # 手順 1・2 の KEY_NAME と KEYRING_BACKEND で、作成済みのウォレットを使う。
     defaults = {
         "KEY_NAME": "testwallet", "KEYRING_BACKEND": "test",
         "CHAIN_ID": "injective-888", "NODE": "https://injective-testnet-rpc.publicnode.com:443",

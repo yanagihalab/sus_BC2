@@ -228,9 +228,15 @@ txhash: 記録のTxHash
 必須課題 1-6 の計測には、[1-6_inj-transfer-time.py](../Day1/1-6_inj-transfer-time.py) を使う。1回の実行で1回送金し、コマンドの起動直前から、TxHash を含む応答を受信してコマンドが終了するまでの秒数を表示する。
 計測値には CLI の起動・署名・RPC 通信・受付応答の待ち時間を含む。`sync` はトランザクションの受付結果を返す方式であり、ブロックへの取り込みは手順 5 または Explorer で確認する。[Cosmos SDK の同期送信処理](https://github.com/cosmos/cosmos-sdk/blob/v0.50.13/client/broadcast.go#L79-L93)
 
-手順 1〜3 の準備を済ませ、手順 4 で共同実験者の受取アドレスを設定する。計測前に、その値を確認する。
+送信元には、手順 1・2 で作成したウォレットをそのまま使う。計測コードは、現在の Bash セッションの `KEY_NAME`（鍵名）と `KEYRING_BACKEND`（鍵の保存方式）を引き継ぐ。標準設定では `testwallet` と `test` を使う。
+ウォレットを作成した Kali Linux の同じユーザーで実行する。新しいターミナルを開いた場合は、手順 1・2 を実行し直し、作成済みのため `injectived keys add` の行は省略する。
+
+手順 1〜3 の準備を済ませ、手順 4 の受取アドレス設定まで実行する。送金は、この節の計測コマンドで行う。計測前に、送信元の鍵名・保存方式・アドレスと、共同実験者の受取アドレスを確認する。
 
 ```bash
+echo "KEY_NAME=$KEY_NAME"
+echo "KEYRING_BACKEND=$KEYRING_BACKEND"
+injectived keys show "$KEY_NAME" -a --keyring-backend "$KEYRING_BACKEND"
 echo "RECIPIENT_ADDR=$RECIPIENT_ADDR"
 ```
 
