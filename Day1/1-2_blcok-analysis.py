@@ -200,28 +200,6 @@ def add_block_diff_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def make_transactions_per_block_line(df: pd.DataFrame, plot_dir: str):
-    os.makedirs(plot_dir, exist_ok=True)
-
-    if df.empty:
-        print("DataFrame が空のため、transactions_per_block_line を作成できません。")
-        return
-
-    *__*.figure(figsize=(12, 6))
-    plt.plot(df["height"], df["num_transactions"], marker="o", markersize=3, linewidth=1)
-    plt.xlabel("Height")
-    plt.ylabel("Number of Transactions")
-    plt.title("Transactions per Block")
-    plt.grid(True)
-    plt.tight_layout()
-
-    output_path = os.path.join(plot_dir, "transactions_per_block_line.png")
-    plt.savefig(output_path, dpi=200)
-    plt.close()
-
-    print(f"保存しました: {output_path}")
-
-
 def make_transaction_histogram(df: pd.DataFrame, plot_dir: str):
     os.makedirs(plot_dir, exist_ok=True)
 
@@ -238,30 +216,6 @@ def make_transaction_histogram(df: pd.DataFrame, plot_dir: str):
     plt.tight_layout()
 
     output_path = os.path.join(plot_dir, "transactions_per_block_histogram.png")
-    plt.savefig(output_path, dpi=200)
-    plt.close()
-
-    print(f"保存しました: {output_path}")
-
-
-def make_block_diff_line(df: pd.DataFrame, plot_dir: str):
-    os.makedirs(plot_dir, exist_ok=True)
-
-    valid_df = df.dropna(subset=["block_diff_sec"])
-
-    if valid_df.empty:
-        print("block_diff_sec が空のため、block_diff_line を作成できません。")
-        return
-
-    plt.figure(figsize=(12, 6))
-    plt.plot(valid_df["height"], valid_df["block_diff_sec"], marker="o", markersize=3, linewidth=1)
-    plt.xlabel("Height")
-    plt.ylabel("Block Time Difference (seconds)")
-    plt.title("Block Time Difference over Height")
-    plt.grid(True)
-    plt.tight_layout()
-
-    output_path = os.path.join(plot_dir, "block_diff_line.png")
     plt.savefig(output_path, dpi=200)
     plt.close()
 
@@ -377,9 +331,7 @@ if __name__ == "__main__":
     df.to_csv(CSV_OUTPUT, index=False, encoding="utf-8-sig")
     print(f"CSVファイル '{CSV_OUTPUT}' に保存しました。")
 
-    make_transactions_per_block_line(df, PLOT_DIR)
     make_transaction_histogram(df, PLOT_DIR)
-    make_block_diff_line(df, PLOT_DIR)
     make_block_diff_histogram(df, PLOT_DIR)
     make_signature_time_span_histogram(df, PLOT_DIR)
 

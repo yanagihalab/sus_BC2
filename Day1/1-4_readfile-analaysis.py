@@ -14,12 +14,7 @@ OUT_DIR = "out_signature_block_interval_analysis"
 MERGED_CSV = "signature_block_interval_validator_merged.csv"
 
 SCATTER_SIMPLE = "sig_span_vs_block_diff_simple.png"
-SCATTER_BY_VALIDATOR_COUNT = "sig_span_vs_block_diff_by_validator_count.png"
-SCATTER_BY_TOTAL_VOTING_POWER = "sig_span_vs_block_diff_by_total_voting_power.png"
 SCATTER_PROPOSER_RANK = "proposer_rank_vs_block_diff.png"
-SCATTER_PREV_PROPOSER_RANK = "prev_proposer_rank_vs_block_diff.png"
-CURRENT_PROPOSER_PREV_RANK_LINE = "current_proposer_prev_rank_over_height.png"
-CURRENT_PROPOSER_PREV_RANK_SCATTER = "current_proposer_prev_rank_vs_block_diff.png"
 
 MAX_SIGNATURE_SPAN_SEC = 60
 MAX_BLOCK_DIFF_SEC = None
@@ -399,72 +394,6 @@ def plot_simple_scatter(df: pd.DataFrame, out_path: str):
     print(f"保存しました: {out_path}")
 
 
-def plot_scatter_by_validator_count(df: pd.DataFrame, out_path: str):
-    if df.empty:
-        print("validator_count 散布図を作成できません: 有効なデータがありません。")
-        return
-
-    if "validator_count" not in df.columns or df["validator_count"].dropna().empty:
-        print("validator_count がないため、散布図を作成できません。")
-        return
-
-    plt.figure(figsize=(10, 7))
-    scatter = plt.scatter(
-        df["sig_time_span_sec"],
-        df["block_diff_sec"],
-        c=df["validator_count"],
-        s=25,
-        alpha=0.75
-    )
-
-    plt.xlabel("Validator Signature Time Span per Block (seconds)")
-    plt.ylabel("Block Time Difference (seconds)")
-    plt.title("Validator Signature Time Span vs Block Time Difference")
-    plt.grid(True)
-
-    cbar = plt.colorbar(scatter)
-    cbar.set_label("Validator Count")
-
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    plt.close()
-
-    print(f"保存しました: {out_path}")
-
-
-def plot_scatter_by_total_voting_power(df: pd.DataFrame, out_path: str):
-    if df.empty:
-        *__*("total_voting_power 散布図を作成できません: 有効なデータがありません。")
-        return
-
-    if "total_voting_power" not in df.columns or df["total_voting_power"].dropna().empty:
-        print("total_voting_power がないため、散布図を作成できません。")
-        return
-
-    plt.figure(figsize=(10, 7))
-    scatter = plt.scatter(
-        df["sig_time_span_sec"],
-        df["block_diff_sec"],
-        c=df["total_voting_power"],
-        s=25,
-        alpha=0.75
-    )
-
-    plt.xlabel("Validator Signature Time Span per Block (seconds)")
-    plt.ylabel("Block Time Difference (seconds)")
-    plt.*__*("Validator Signature Time Span vs Block Time Difference")
-    plt.grid(True)
-
-    cbar = plt.colorbar(scatter)
-    cbar.set_label("Total Voting Power")
-
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    plt.*__*()
-
-    print(f"保存しました: {out_path}")
-
-
 def plot_proposer_rank_vs_block_diff(df: pd.DataFrame, out_path: str):
     if df.empty:
         print("proposer rank 散布図を作成できません: 有効なデータがありません。")
@@ -494,115 +423,6 @@ def plot_proposer_rank_vs_block_diff(df: pd.DataFrame, out_path: str):
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(out_path, dpi=200)
-    plt.close()
-
-    print(f"保存しました: {out_path}")
-
-
-def plot_prev_proposer_rank_vs_block_diff(df: pd.DataFrame, out_path: str):
-    if df.empty:
-        print("previous proposer rank 散布図を作成できません: 有効なデータがありません。")
-        return
-
-    if "prev_proposer_priority_rank" not in df.columns:
-        print("prev_proposer_priority_rank がないため、散布図を作成できません。")
-        return
-
-    valid_df = df.dropna(subset=["prev_proposer_priority_rank", "block_diff_sec"])
-
-    if valid_df.empty:
-        print("prev_proposer_priority_rank と block_diff_sec の有効データがありません。")
-        return
-
-    plt.figure(figsize=(10, 7))
-    plt.scatter(
-        valid_df["prev_proposer_priority_rank"],
-        valid_df["block_diff_sec"],
-        s=25,
-        alpha=0.75
-    )
-
-    plt.xlabel("Previous Block Proposer Rank")
-    plt.ylabel("Block Time Difference (seconds)")
-    plt.title("Previous Block Proposer Rank vs Block Time Difference")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    plt.close()
-
-    print(f"保存しました: {out_path}")
-
-
-def plot_current_proposer_prev_rank_over_height(df: pd.DataFrame, out_path: str):
-    if df.empty:
-        print("current proposer previous rank の時系列図を作成できません: 有効なデータがありません。")
-        return
-
-    if "current_proposer_rank_in_prev_block" not in df.columns:
-        print("current_proposer_rank_in_prev_block がないため、描画できません。")
-        return
-
-    valid_df = df.dropna(subset=[
-        "height",
-        "current_proposer_rank_in_prev_block",
-    ])
-
-    if valid_df.empty:
-        print("current_proposer_rank_in_prev_block の有効データがありません。")
-        return
-
-    plt.figure(figsize=(12, 6))
-    plt.plot(
-        valid_df["height"],
-        valid_df["current_proposer_rank_in_prev_block"],
-        marker="o",
-        markersize=3,
-        linewidth=1
-    )
-
-    plt.xlabel("Height")
-    plt.ylabel("Proposer Rank in Previous Block")
-    plt.title("Proposer Rank in Previous Block over Height")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    plt.close()
-
-    print(f"保存しました: {out_path}")
-
-
-def plot_current_proposer_prev_rank_vs_block_diff(df: pd.DataFrame, out_path: str):
-    if df.empty:
-        print("current proposer previous rank 散布図を作成できません: 有効なデータがありません。")
-        return
-
-    if "current_proposer_rank_in_prev_block" not in df.columns:
-        print("current_proposer_rank_in_prev_block がないため、散布図を作成できません。")
-        return
-
-    valid_df = df.dropna(subset=[
-        "current_proposer_rank_in_prev_block",
-        "block_diff_sec",
-    ])
-
-    if valid_df.empty:
-        print("current_proposer_rank_in_prev_block と block_diff_sec の有効データがありません。")
-        return
-
-    plt.figure(figsize=(10, 7))
-    plt.scatter(
-        valid_df["current_proposer_rank_in_prev_block"],
-        valid_df["block_diff_sec"],
-        s=25,
-        alpha=0.75
-    )
-
-    plt.xlabel("Proposer Rank in Previous Block")
-    plt.ylabel("Block Time Difference (seconds)")
-    plt.title("Proposer Rank in Previous Block vs Block Time Difference")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.*__*(out_path, dpi=200)
     plt.close()
 
     print(f"保存しました: {out_path}")
@@ -778,32 +598,11 @@ def main():
     print(f"保存しました: {merged_csv_path}")
 
     simple_path = os.path.join(OUT_DIR, SCATTER_SIMPLE)
-    validator_count_path = os.path.join(OUT_DIR, SCATTER_BY_VALIDATOR_COUNT)
-    total_voting_power_path = os.path.join(OUT_DIR, SCATTER_BY_TOTAL_VOTING_POWER)
     proposer_rank_path = os.path.join(OUT_DIR, SCATTER_PROPOSER_RANK)
-    prev_proposer_rank_path = os.path.join(OUT_DIR, SCATTER_PREV_PROPOSER_RANK)
-    current_proposer_prev_rank_line_path = os.path.join(
-        OUT_DIR,
-        CURRENT_PROPOSER_PREV_RANK_LINE
-    )
-    current_proposer_prev_rank_scatter_path = os.path.join(
-        OUT_DIR,
-        CURRENT_PROPOSER_PREV_RANK_SCATTER
-    )
 
     plot_simple_scatter(
         merged_df,
         simple_path
-    )
-
-    plot_scatter_by_validator_count(
-        merged_df,
-        validator_count_path
-    )
-
-    plot_scatter_by_total_voting_power(
-        merged_df,
-        total_voting_power_path
     )
 
     plot_proposer_rank_vs_block_diff(
@@ -811,32 +610,12 @@ def main():
         proposer_rank_path
     )
 
-    plot_prev_proposer_rank_vs_block_diff(
-        merged_df,
-        prev_proposer_rank_path
-    )
-
-    plot_current_proposer_prev_rank_over_height(
-        merged_df,
-        current_proposer_prev_rank_line_path
-    )
-
-    plot_current_proposer_prev_rank_vs_block_diff(
-        merged_df,
-        current_proposer_prev_rank_scatter_path
-    )
-
     print_summary(merged_df, presence_df)
 
     print("\n===== Output Files =====")
     print(merged_csv_path)
     print(simple_path)
-    print(validator_count_path)
-    print(total_voting_power_path)
     print(proposer_rank_path)
-    print(prev_proposer_rank_path)
-    print(current_proposer_prev_rank_line_path)
-    print(current_proposer_prev_rank_scatter_path)
 
     return 0
 

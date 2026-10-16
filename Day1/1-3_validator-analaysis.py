@@ -429,25 +429,6 @@ def plot_validator_set_changes(diffs, out_path, use_scientific=False):
     plt.close()
 
 
-def plot_priority_changed_count(diffs, out_path, use_scientific=False):
-    if not diffs:
-        return
-
-    heights = [x["curr_height"] for x in diffs]
-    priority_changed = [x["priority_changed_count"] for x in diffs]
-
-    plt.figure(figsize=(12, 6))
-    plt.plot(heights, priority_changed, marker="o", markersize=2, linewidth=1)
-    plt.xlabel("Current Height")
-    plt.ylabel("Priority Changed Count")
-    plt.title("Proposer Priority Changes over Height")
-    plt.grid(True)
-    apply_axis_format(use_scientific, axis="x")
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    plt.close()
-
-
 def plot_all_validators_voting_power(
     blocks,
     stats,
@@ -675,24 +656,9 @@ def main():
         "validator_set_changes_over_height.png"
     )
 
-    plot_priority_changed_count_path = os.path.join(
-        OUT_DIR,
-        "priority_changed_count_over_height.png"
-    )
-
-    plot_all_validators_voting_power_scientific_path = os.path.join(
-        OUT_DIR,
-        "all_validators_voting_power_scientific.png"
-    )
-
     plot_all_validators_voting_power_plain_path = os.path.join(
         OUT_DIR,
         "all_validators_voting_power_plain.png"
-    )
-
-    plot_all_validators_proposer_priority_scientific_path = os.path.join(
-        OUT_DIR,
-        "all_validators_proposer_priority_scientific.png"
     )
 
     plot_all_validators_proposer_priority_plain_path = os.path.join(
@@ -717,35 +683,11 @@ def main():
         use_scientific=False
     )
 
-    plot_priority_changed_count(
-        diffs,
-        plot_priority_changed_count_path,
-        use_scientific=False
-    )
-
-    plot_all_validators_voting_power(
-        blocks,
-        stats,
-        plot_all_validators_voting_power_scientific_path,
-        use_scientific=True,
-        fig_width=16,
-        fig_height=8
-    )
-
     plot_all_validators_voting_power(
         blocks,
         stats,
         plot_all_validators_voting_power_plain_path,
         use_scientific=False,
-        fig_width=16,
-        fig_height=8
-    )
-
-    plot_all_validators_proposer_priority(
-        blocks,
-        stats,
-        plot_all_validators_proposer_priority_scientific_path,
-        use_scientific=True,
         fig_width=16,
         fig_height=8
     )
@@ -769,10 +711,7 @@ def main():
     print(diff_details_json)
     print(plot_validator_count_path)
     print(plot_validator_changes_path)
-    print(plot_priority_changed_count_path)
-    print(plot_all_validators_voting_power_scientific_path)
     print(plot_all_validators_voting_power_plain_path)
-    print(plot_all_validators_proposer_priority_scientific_path)
     print(plot_all_validators_proposer_priority_plain_path)
 
     return 0
