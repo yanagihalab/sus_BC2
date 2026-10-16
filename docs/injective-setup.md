@@ -223,6 +223,63 @@ txhash: 記録のTxHash
 
 </details>
 
+### 4.1. INJ 送金の TxHash 応答時間を計測する
+
+必須課題 1-6 の計測には、[1-6_inj-transfer-time.py](../Day1/1-6_inj-transfer-time.py) を使う。1回の実行で1回送金し、コマンドの起動直前から、TxHash を含む応答を受信してコマンドが終了するまでの秒数を表示する。
+計測値には CLI の起動・署名・RPC 通信・受付応答の待ち時間を含む。`sync` はトランザクションの受付結果を返す方式であり、ブロックへの取り込みは手順 5 または Explorer で確認する。[Cosmos SDK の同期送信処理](https://github.com/cosmos/cosmos-sdk/blob/v0.50.13/client/broadcast.go#L79-L93)
+
+手順 1〜3 の準備を済ませ、手順 4 で共同実験者の受取アドレスを設定する。計測前に、その値を確認する。
+
+```bash
+echo "RECIPIENT_ADDR=$RECIPIENT_ADDR"
+```
+
+送金量とガス上限を設定し、計測付きで1回送金する。
+
+```bash
+# 送金量を inj 単位で指定する。この例は 0.001 INJ。
+export AMOUNT="1000000000000000inj"
+export BANK_SEND_GAS=200000
+CONFIRM_SEND=yes python3 Day1/1-6_inj-transfer-time.py
+```
+
+CLI の JSON 応答にある `txhash` がその回の TxHash、末尾の `Response time` がコマンドの応答時間（秒）を表す。結果は端末に表示する。
+各回の TxHash で送金結果を確認してから、同じ計測コマンドを10回以上実行する。表示された TxHash と時間を報告書に記録し、CLI が正常に終了して応答の `code` が `0` で、TxHash を確認できた回の時間から平均を求める。
+
+<details>
+<summary>補足：計測コードの設定と処理順序</summary>
+
+計測コードは Python の標準ライブラリを使い、次の環境変数を送金コマンドに渡す。
+
+| 環境変数 | 対応する設定値 | 未設定または空欄の場合の値 |
+| --- | --- | --- |
+| `KEY_NAME` | 送信元の鍵名 | `testwallet` |
+| `KEYRING_BACKEND` | 鍵の保存方式。対話入力のない `test` を使う | `test` |
+| `CHAIN_ID` | 接続するチェーンの ID | `injective-888` |
+| `NODE` | 接続先の RPC URL | `https://injective-testnet-rpc.publicnode.com:443` |
+| `GAS_PRICES` | ガス単価 | `500000000inj` |
+| `BANK_SEND_GAS` | 送金のガス上限 | `200000` |
+| `AMOUNT` | 最小単位で指定する INJ の送金量 | `1000000000000000inj`（`0.001 INJ`） |
+| `RECIPIENT_ADDR` | 共同実験者の受取アドレス | 必ず設定する |
+| `CONFIRM_SEND` | 送金を実行する指定 | 実行時に `yes` を渡す |
+
+処理は次の順に実行する。
+
+1. 環境変数と CLI の制限時間を確認する。
+2. `time.perf_counter()` で計測を始め、`injectived tx bank send` を `--broadcast-mode sync --output json -y` 付きで1回実行する。CLI の標準出力・標準エラーはそのまま端末に表示する。
+3. コマンドが終了した直後に計測を終え、経過秒数を `Response time` として表示する。
+
+送金の受付結果は CLI 応答の `code` で確認し、ブロックへの取り込み結果は TxHash で確認する。タイムアウト・中断の場合も、表示された応答を確認してから次の送金を行う。コードは送信を自動で再試行しない。
+
+CLI の制限時間を変更する場合は、次のように指定する。
+
+```bash
+# --timeout に制限時間を秒数で指定する。
+CONFIRM_SEND=yes python3 Day1/1-6_inj-transfer-time.py --timeout 60
+```
+
+</details>
+
 ## 5. トランザクションの成功を確認する
 
 送金、TokenFactory、CW20 などの書き込み操作の結果を照会するため、`check_tx` 関数を定義する。このブロックでは関数を定義するだけで、照会は実行しない。
