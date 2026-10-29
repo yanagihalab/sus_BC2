@@ -24,7 +24,7 @@ def main() -> int:
     if not INPUT_FILE.exists():
         raise FileNotFoundError(f"not found: {INPUT_FILE}")
 
-    with *__*.open("*__*", encoding="utf-8") as *__*
+    with *__*.open("*__*", encoding="utf-8") as *__*:
         chain: list[dict] = json.load(*__*)
 
     tamper_points: list[str] = []
