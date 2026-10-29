@@ -36,5 +36,6 @@ cw20_transfer_result.json
 # Temporarily private experiment scripts
 Day3/*.py
 Day3/*.sh
+!Day3/calc_simblock_propagation.sh
 !Day3/renew_calc_simblock_metrics.sh
 Day3/blockchain_2000_tampered.json

@@ -518,14 +518,145 @@ python3 Day3/3-1_btc_mining.py
 ## SimBlock の実行
 
 SimBlock は Day3 で使用する。ソースコードの取得とビルドは、主手順 3 の一括セットアップで完了する。
-実験時は、現在のターミナルで Java 11 を選び、SimBlock に付属する Gradle Wrapper で実行する。
+SimBlock 本体は教材リポジトリとは別に `~/temp/simblock` へ取得される。以下はこの配置での例であり、実験テキストの `<ROOT_DIR>` には SimBlock 本体の配置先を指定する。
+
+### 実験条件を設定して実行する
+
+各シナリオに合わせて、SimBlock 本体の次のファイルなどを編集する。教材のセットアップや集計スクリプトは、Java の実験条件を自動で変更しない。
+
+- `simulator/src/main/java/simblock/settings/SimulationConfiguration.java`：ノード数、ブロック生成間隔、ブロックサイズ、終了ブロック高、マイニング能力など。
+- `simulator/src/main/java/simblock/settings/NetworkConfiguration.java`：地域別のノード割合、通信帯域、地域間遅延など。
+
+接続数やマイニング能力の配分も含め、実際に設定した条件を記録する。時間とサイズは、次の単位に注意する。
+
+| 設定・集計項目 | 単位 | 標準条件の例 |
+| --- | --- | --- |
+| Java の `INTERVAL` | ミリ秒 | 600 秒なら `600000` |
+| 集計時の `INTERVAL_SEC` | 秒 | `600` |
+| Java と集計時の `BLOCK_SIZE` | byte | 1.0 MB なら `1000000` |
+| 集計時の `AVG_TX_SIZE` | byte | `250` |
+
+設定を保存した後、現在のターミナルで Java 11 を選び、SimBlock 本体のルートでビルド・実行する。
 
 ```bash
 export JAVA_HOME="$(find /usr/lib/jvm -maxdepth 1 -type d -name 'java-11-openjdk-*' | sort | head -n 1)"
 export PATH="$JAVA_HOME/bin:$PATH"
 cd ~/temp/simblock
+bash ./gradlew :spotlessApply
+bash ./gradlew build
 bash ./gradlew :simulator:run
 ```
+
+### 同じ実行の出力を集計する
+
+出力先は、通常 `~/temp/simblock/simulator/src/dist/output` である。
+課題 5・6 の集計には、同じ実行で生成された `blockList.txt` と `output.json` を使い、[calc_simblock_propagation.sh](Day3/calc_simblock_propagation.sh) を実行する。
+集計用の既定値は `BLOCK_SIZE=1000000`、`AVG_TX_SIZE=250`、`INTERVAL_SEC=600` である。
+次は 1.0 MB・600 秒の集計例である。`BLOCK_SIZE` と `INTERVAL_SEC` は、Java 側で実際に設定した値に合わせる。これらの指定は集計用であり、シミュレーションの条件を変更するものではない。
+
+```bash
+cd ~/temp/sus_BC2
+BLOCK_SIZE=1000000 AVG_TX_SIZE=250 INTERVAL_SEC=600 \
+bash Day3/calc_simblock_propagation.sh \
+  ~/temp/simblock/simulator/src/dist/output
+```
+
+次の条件を実行する前に、`blockList.txt`、`output.json`、集計 CSV、画面の集計結果を、実験条件と対応する名前で保存する。
+SimBlock Visualizer にも、その実行の `output.json` を読み込ませる。
+以前の `calc_simblock_metrics.sh` と `renew_calc_simblock_metrics.sh` も同じ伝播集計を呼び出す。どの入口も、指定した出力ディレクトリ内の `blockList.txt` と `output.json` を使う。
+以前の renew 版にあった `PROPAGATION_FILE`・`OUTPUT_JSON` による別ファイルの指定と flow-block の集計は、この共通の集計方法へ置き換える。課題の手順では上の伝播集計スクリプトに統一する。
+
+#### 伝播時間・フォーク数の読み方
+
+伝播集計は `output.json` の `add-node` と `add-block` を使う。
+各ノードの最初の `add-block` 時刻から、そのブロックで最も早い時刻を引き、ブロックごとのノード間平均と 90%・95% 分位値を求める。それぞれをブロック間で平均した値が、次の画面表示である。
+分位値は、時刻差を昇順に並べ、ノード数に 0.90 または 0.95 を掛けて切り上げた順位の値を使う。
+
+| 報告項目 | 画面の項目 | 単位・意味 |
+| --- | --- | --- |
+| 平均ブロック伝播時間 | `average_block_propagation_time` | 観測ノード内の平均をブロック間で平均、ミリ秒 |
+| 90% ノード到達時間 | `average_90pct_node_arrival_time` | 観測ノード内の 90% 分位値をブロック間で平均、ミリ秒 |
+| 95% ノード到達時間 | `average_95pct_node_arrival_time` | 観測ノード内の 95% 分位値をブロック間で平均、ミリ秒 |
+| フォーク発生数 | `fork_count` | `blockList.txt` の `Orphan` 件数 |
+| フォーク率 | `fork_rate_percent` | `Orphan / (OnChain + Orphan) × 100`、% |
+
+標準の SimBlock の時刻単位はミリ秒であり、集計画面にも `propagation_time_unit : milliseconds` と表示される。秒で報告する場合は時間の値を 1000 で割り、単位を明記する。
+フォーク率の分母は同じ実行の全生成ブロック数であり、終了ブロック高の 300 や 500、伝播集計の対象ブロック数で代用しない。
+本集計ではフォーク数を孤立ブロック数として数えるため、`fork_rate` と `orphan_rate` は同じ値になる。
+
+ブロックごとの結果は、指定した出力先の `propagation_metrics_from_add_block.csv` に保存される。
+課題 5・6 の報告には、次の手順で**全ノードへ到達したブロックだけ**の値を使う。
+
+1. CSV の `reached_rate`（%）を確認する。全行が `100` なら、上の画面の伝播時間を報告する。
+2. `100` 未満の行がある場合は、`reached_rate` が `100` の行だけを抽出し、`avg_time`、`p90_time`、`p95_time` の各列を平均して、伝播時間の 3 指標を報告する。これらの列もミリ秒である。
+3. 到達率が `100` 未満の行数と、除外後の集計ブロック数を併記する。対象が 0 件なら「全ノード基準の伝播時間は算出できなかった」と報告し、観測ノード内の値で代用しない。
+
+この CSV の抽出・平均と同じ規則で集計した値は、画面の次の項目でも確認できる。一部未到達のブロックがある場合は、上の観測ノードを対象とした `average_*` と区別する。
+
+| 全ノード到達行の集計項目 | 画面の項目 |
+| --- | --- |
+| 除外後の報告対象ブロック数 | `fully_reached_blocks` |
+| 到達率が 100% 未満の CSV 行数 | `partially_reached_blocks` |
+| 全ノード基準の伝播時間を算出できたか | `full_reach_propagation_available`（`1`：算出可能、`0`：対象なし） |
+| 平均ブロック伝播時間（ミリ秒） | `full_reach_average_block_propagation_time` |
+| 90% ノード到達時間（ミリ秒） | `full_reach_average_90pct_node_arrival_time` |
+| 95% ノード到達時間（ミリ秒） | `full_reach_average_95pct_node_arrival_time` |
+
+対象が 0 件の場合、全ノード基準の時間 3 項目は `N/A` になる。この場合も観測ノード内の時間で代用しない。
+
+2 ノード以上の `add-block` が記録されていないブロックは、CSV 自体に含まれない。
+`propagation_available : 0` が表示された場合や CSV が生成されない場合は、入力ファイルと実行結果を確認する。
+
+推定 TPS は `BLOCK_SIZE / AVG_TX_SIZE / INTERVAL_SEC` で求める。`effective_tps_onchain` は `OnChain` を基準とし、`generated_block_tps` は `Orphan` を含む参考値である。
+
+### 必須課題 5：練習比較の 3 シナリオ
+
+V3 の次の 3 シナリオを実行し、上の集計手順で平均・90%・95% の伝播時間とフォーク発生数を記録する。
+サイズの MB は `1 MB = 1000000 byte` として Java と集計の設定に換算する。
+
+| シナリオ | ノード数 | サイズ（MB） | 間隔（秒） | 接続数の設定値 | 帯域倍率 | 遅延倍率 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 軽量 | 300 | 0.5 | 600 | 8 | 1.0 | 1.0 |
+| 標準 | 1000 | 1.0 | 600 | 8 | 1.0 | 1.0 |
+| 高負荷 | 1000 | 4.0 | 60 | 4 | 0.5 | 2.0 |
+
+### 必須課題 6：1 パラメータの比較
+
+基準は V3 の No.3（中規模標準）である。ノード数 `1000`、終了ブロック高 `300`、サイズ `1000000` byte、間隔 `600` 秒、接続数の設定値 `8`、帯域倍率 `1.0`、遅延倍率 `1.0`、マイニング能力は均等に設定する。
+ブロック数以外のパラメータを 1 つ選び、基準とは異なる 2 つの値に変更した条件を加え、計 3 条件で比較する。
+全条件の終了ブロック高を `300` にそろえ、選んだパラメータ以外を基準と同じにする。
+
+たとえば、ブロックサイズだけを変える場合は次の 3 条件になる。
+
+| 条件 | サイズ（byte） | V3 のシナリオ |
+| --- | ---: | --- |
+| 基準 | `1000000` | No.3：1.0 MB |
+| 比較 1 | `250000` | No.6：0.25 MB |
+| 比較 2 | `4000000` | No.8：4.0 MB |
+
+各条件で平均・90%・95% の伝播時間、`fork_count`、`fork_rate_percent`（%）を記録する。
+フォーク率の分母には実際の `OnChain + Orphan` 件数を使い、終了ブロック高の `300` を使わない。
+
+### 発表課題：伝播性能を改善する
+
+発表課題は課題 6 とは別の基準を使う。SimBlock 取得時の初期値によらず、まず次の値を設定する。
+
+| 項目 | 発表の基準条件 | 比較時の扱い |
+| --- | --- | --- |
+| ノード数 | `100` | 固定 |
+| 終了ブロック高（ブロック数設定） | `500` 以上 | 実行値を記録 |
+| ブロックサイズ | `1000000` byte（1.0 MB） | 変更可能 |
+| 平均ブロック生成間隔 | `600` 秒（Java の `INTERVAL = 600000`） | 変更可能 |
+| 接続数の設定値 | `8` | 変更可能 |
+| 地域分布 | 実験開始時に採用した地域別割合を記録 | その割合に固定 |
+| 帯域倍率・遅延倍率 | どちらも `1.0` | 固定 |
+| マイニング能力 | 上位 10% のノードが全体の 50% | 基準と同じ配分に固定 |
+
+固定条件を変えた結果は比較対象外とする。接続数の設定値と、実際の平均隣接ノード数は区別して記録する。
+100 ノードでは、自己接続と重複を除く各ノードの接続先は最大 99 ノードである。
+
+伝播時間の 3 指標、フォーク発生数・率、孤立ブロック率、TPS を比較し、フォーク発生数 `1` 以下かつフォーク率 `0.002` 以下（`fork_rate_percent` では `0.2%` 以下）を満たしつつ TPS を高める条件を探す。
+目標を満たせない場合も、最も近い条件と未達の指標を示し、基準からの変更が結果へ与えた影響を考察する。
 
 ## ブロックチェーン実験
 
